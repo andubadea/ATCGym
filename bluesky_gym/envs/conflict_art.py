@@ -241,7 +241,7 @@ class ConflictArtEnv(gym.Env):
         int_color = (1,0,0) # Default red, used to trajectory lines
         int_spd_color = np.zeros((self.n_intruders, 3))
         int_spd_color[:,0] += 1 # By default intruders are red
-        int_spd_color[:,2] += self.ac_speeds[1:]/self.max_speed # Encode the speed in the blue channel
+        int_spd_color[:,2] += (self.ac_speeds[1:] + self.max_speed)/(self.max_speed * 2) # Encode the speed in the blue channel
     
         # Plot intruder info in red
         for i in range(self.n_intruders):
@@ -262,7 +262,7 @@ class ConflictArtEnv(gym.Env):
         # Plot ownship info in green
         # Encode its speed in the blue channel
         own_color = (0,1,0)
-        own_spd_color = (0,1,self.ac_speeds[0]/self.max_speed)
+        own_spd_color = (0,1, (self.ac_speeds[0]+ self.max_speed)/(self.max_speed*2))
         ax.scatter(self.ac_locations[0][0],
                     self.ac_locations[0][1], 
                     marker='o', 
