@@ -5,6 +5,7 @@ import pygame
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from typing import Tuple, Dict, Any, List
 matplotlib.rcParams['interactive'] = False
 matplotlib.use('Agg')
 
@@ -14,7 +15,7 @@ class ConflictArtEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     def __init__(self, render_mode=None, n_intruders = 1):
         # Will want to eventually make these env properties
-        self.n_intruders = 4 # number of intruders to spawn
+        self.n_intruders = 5 # number of intruders to spawn
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
@@ -23,11 +24,11 @@ class ConflictArtEnv(gym.Env):
         self.default_speed = 10 #m/s, default speed for ownship
         
         # Image properties
-        self.image_pixel_size = 300 # Resolution of image
+        self.image_pixel_size = 100 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
-        self.dt = 0.05 # seconds, simulation time step
+        self.dt = 1 # seconds, simulation time step
         self.action_dt = 1 #seconds, action time step
         self.step_no = 0 #sim step counter
         self.max_steps = 500 #maximum steps per episode
@@ -40,9 +41,7 @@ class ConflictArtEnv(gym.Env):
         self.debug = False
         
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Dict({
-                "rgb_image": spaces.Box(low = 0, high = self.image_pixel_size, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
-        })
+        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -80,13 +79,14 @@ class ConflictArtEnv(gym.Env):
             info_dict[f"int{acidx}_target"] = self.ac_targets[acidx]
             info_dict[f"int{acidx}_dist"] = self.dist2target(acidx)
         # Intrusions
-        info_dict["own_intrusions"] = self.intrusions
+        info_dict["own_intrusion_steps"] = self.intrusion_time_steps
         return info_dict
         
-    def reset(self, seed=None, options=None) -> list[np.ndarray, dict]:
+    def reset(self, seed=None, options=None) -> Tuple[np.ndarray, Dict]:
         # This generates a new episode after one has been completed
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
+        self.step_no = 0
         
         # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
         # Ensure the initial locations are spaced enough apart
@@ -105,6 +105,9 @@ class ConflictArtEnv(gym.Env):
         
         # For intruders, we want the targets to be very far away so they leave the screen eventually
         self.scale_intruder_targets()
+        
+        # Number of intrusion time steps
+        self.intrusion_time_steps = 0
 
         observation = self._get_obs()
         info = self._get_info()
@@ -132,12 +135,12 @@ class ConflictArtEnv(gym.Env):
         success = own_dist2goal < self.target_tolerance
         # An intrusion occurs when any distance to others is smaller than the protection zone
         intrusion = np.any(own_dist2others < self.rpz)
+        self.intrusion_time_steps += 1 if intrusion else 0
         # We terminate the episode if the ownship is successful or too many time steps have passed
         terminated = success or self.step_no > self.max_steps
-        
         # We reward success and penalise intrusions
         reward = 1 if success else 0 # reward for finishing
-        reward = reward if intrusion else reward + 0.1 # lack of intrusions is rewarded
+        reward = reward if not intrusion else reward - 0.1 # lack of intrusions is rewarded
         observation = self._get_obs()
         info = self._get_info()
 
@@ -152,6 +155,7 @@ class ConflictArtEnv(gym.Env):
             print(f'Speed: {self.ac_speeds[0]}')
             print(f'Intrusion: {intrusion}')
             print(f'Reward: {reward}')
+            print(f'Terminated: {terminated}')
         
         self.step_no += 1
         
@@ -289,75 +293,15 @@ class ConflictArtEnv(gym.Env):
         # Clear memory
         fig.clear()
         plt.close()
-        return rgb_array
+        return rgb_array[:,:,:3]
     
     def render(self):
         if self.render_mode == "rgb_array":
             return self._render_frame()
 
     def _render_frame(self):
-        if self.window is None and self.render_mode == "human":
-            pygame.init()
-            pygame.display.init()
-            self.window = pygame.display.set_mode(
-                (self.window_size, self.window_size)
-            )
-        if self.clock is None and self.render_mode == "human":
-            self.clock = pygame.time.Clock()
-
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))
-        pix_square_size = (
-            self.window_size / self.size
-        )  # The size of a single grid square in pixels
-
-        # First we draw the target
-        pygame.draw.rect(
-            canvas,
-            (255, 0, 0),
-            pygame.Rect(
-                pix_square_size * self._target_location,
-                (pix_square_size, pix_square_size),
-            ),
-        )
-        # Now we draw the agent
-        pygame.draw.circle(
-            canvas,
-            (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
-            pix_square_size / 3,
-        )
-
-        # Finally, add some gridlines
-        for x in range(self.size + 1):
-            pygame.draw.line(
-                canvas,
-                0,
-                (0, pix_square_size * x),
-                (self.window_size, pix_square_size * x),
-                width=3,
-            )
-            pygame.draw.line(
-                canvas,
-                0,
-                (pix_square_size * x, 0),
-                (pix_square_size * x, self.window_size),
-                width=3,
-            )
-
-        if self.render_mode == "human":
-            # The following line copies our drawings from `canvas` to the visible window
-            self.window.blit(canvas, canvas.get_rect())
-            pygame.event.pump()
-            pygame.display.update()
-
-            # We need to ensure that human-rendering occurs at the predefined framerate.
-            # The following line will automatically add a delay to keep the framerate stable.
-            self.clock.tick(self.metadata["render_fps"])
-        else:  # rgb_array
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-            )
+        # TODO: This
+        pass
         
     def close(self):
         if self.window is not None:
@@ -395,6 +339,8 @@ class ConflictArtEnv(gym.Env):
 if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
+    for a in range(200):
+        env.step(0)
     #env.conflict_plot()
-    import timeit
-    print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
+    # import timeit
+    # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
