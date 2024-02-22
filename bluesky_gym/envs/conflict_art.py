@@ -15,20 +15,20 @@ class ConflictArtEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     def __init__(self, render_mode=None, n_intruders = 1):
         # Will want to eventually make these env properties
-        self.n_intruders = 5 # number of intruders to spawn
+        self.n_intruders = 9 # number of intruders to spawn
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 2 # m/s, constant acceleration magnitude
-        self.max_speed = 20 #m/s, maximum speed both backwards and forwards
+        self.max_speed = 15 #m/s, maximum speed both backwards and forwards
         self.default_speed = 10 #m/s, default speed for ownship
         
         # Image properties
-        self.image_pixel_size = 100 # Resolution of image
+        self.image_pixel_size = 128 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
-        self.dt = 1 # seconds, simulation time step
+        self.dt = 0.1 # seconds, simulation time step
         self.action_dt = 1 #seconds, action time step
         self.step_no = 0 #sim step counter
         self.max_steps = 500 #maximum steps per episode
@@ -38,7 +38,7 @@ class ConflictArtEnv(gym.Env):
         self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
         
         # Debugging mode
-        self.debug = False
+        self.debug = True
         
         # Build observation space dict, define it as an rgb image
         self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
@@ -138,9 +138,12 @@ class ConflictArtEnv(gym.Env):
         self.intrusion_time_steps += 1 if intrusion else 0
         # We terminate the episode if the ownship is successful or too many time steps have passed
         terminated = success or self.step_no > self.max_steps
+        
         # We reward success and penalise intrusions
         reward = 1 if success else 0 # reward for finishing
-        reward = reward if not intrusion else reward - 0.1 # lack of intrusions is rewarded
+        reward = reward if not intrusion else reward - 0.1 # intrusions are penalised
+        
+        # Get needed info
         observation = self._get_obs()
         info = self._get_info()
 
@@ -241,7 +244,7 @@ class ConflictArtEnv(gym.Env):
                         self.ac_locations[acidx][1], 
                         marker='o', 
                         color = int_color,
-                        s = 300) # Location
+                        s = 600) # Location
 
             ax.plot([self.ac_locations[acidx][0],
                     self.ac_targets[acidx][0]], 
@@ -256,7 +259,7 @@ class ConflictArtEnv(gym.Env):
                     self.ac_locations[0][1], 
                     marker='o', 
                     color = own_color,
-                    s = 300,
+                    s = 600,
                     linewidths=3) # Location
         
         ax.plot([self.ac_locations[0][0],
@@ -275,8 +278,6 @@ class ConflictArtEnv(gym.Env):
 
         # Add ax to figure 
         fig.add_axes(ax)
-        if self.debug:
-            fig.savefig(f'./debug/images/{self.step_no}.png')
         # Get figure as numpy array
         canvas = FigureCanvasAgg(fig)
         canvas.draw()  # update/draw the elements
@@ -293,6 +294,12 @@ class ConflictArtEnv(gym.Env):
         # Clear memory
         fig.clear()
         plt.close()
+        if self.debug:
+            fig_debug, ax = plt.subplots()
+            ax.imshow(rgb_array)
+            fig_debug.savefig(f'./debug/images/{self.step_no}.png')
+            fig_debug.clear()
+            plt.close()
         return rgb_array[:,:,:3]
     
     def render(self):
