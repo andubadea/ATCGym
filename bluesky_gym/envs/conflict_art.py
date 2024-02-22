@@ -3,7 +3,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import pygame
 import matplotlib
-import time
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 matplotlib.rcParams['interactive'] = False
