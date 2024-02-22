@@ -235,15 +235,21 @@ class ConflictArtEnv(gym.Env):
         # Get rid of white space
         plt.tight_layout(pad=-5)
         fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=0, hspace=0)
+        
+        # Encode the velocity of the ownship and intruders within the blue channel
+        # 0 means maximum negative speed, 1 means maximum positive speed
+        int_color = (1,0,0) # Default red, used to trajectory lines
+        int_spd_color = np.zeros((self.n_intruders, 3))
+        int_spd_color[:,0] += 1 # By default intruders are red
+        int_spd_color[:,2] += self.ac_speeds[1:]/self.max_speed # Encode the speed in the blue channel
     
         # Plot intruder info in red
-        int_color = (1,0,0)
         for i in range(self.n_intruders):
             acidx = i + 1
             ax.scatter(self.ac_locations[acidx][0],
                         self.ac_locations[acidx][1], 
                         marker='o', 
-                        color = int_color,
+                        color = int_spd_color[i],
                         s = 600) # Location
 
             ax.plot([self.ac_locations[acidx][0],
@@ -254,11 +260,13 @@ class ConflictArtEnv(gym.Env):
                     linewidth=2) # Trajectory
             
         # Plot ownship info in green
+        # Encode its speed in the blue channel
         own_color = (0,1,0)
+        own_spd_color = (0,1,self.ac_speeds[0]/self.max_speed)
         ax.scatter(self.ac_locations[0][0],
                     self.ac_locations[0][1], 
                     marker='o', 
-                    color = own_color,
+                    color = own_spd_color,
                     s = 600,
                     linewidths=3) # Location
         
@@ -347,7 +355,7 @@ if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
     for a in range(200):
-        env.step(0)
+        env.step(1)
     #env.conflict_plot()
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
