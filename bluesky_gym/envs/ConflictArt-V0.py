@@ -105,9 +105,6 @@ class ConflictArtEnv(gym.Env):
         
         # For intruders, we want the targets to be very far away so they leave the screen eventually
         self.scale_intruder_targets()
-                
-        # Initialise number of intrusions
-        self.intrusions = 0
 
         observation = self._get_obs()
         info = self._get_info()
