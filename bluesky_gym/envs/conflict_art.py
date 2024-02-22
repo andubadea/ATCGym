@@ -3,6 +3,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import pygame
 import matplotlib
+import time
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 matplotlib.rcParams['interactive'] = False
@@ -15,14 +16,21 @@ class ConflictArtEnv(gym.Env):
     def __init__(self, render_mode=None, n_intruders = 1):
         # Will want to eventually make these env properties
         self.n_intruders = 2 # number of intruders to spawn
-        self.image_pixel_size = 300 # Resolution of image
-        self.image_inch_size = 10 # Needed only for matplotlib
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 16 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 2 # m/s, constant acceleration magnitude
         self.max_speed = 18 #m/s, maximum speed both backwards and forwards
         self.default_speed = 10 #m/s, default speed for ownship
+        
+        # Image properties
+        self.image_pixel_size = 300 # Resolution of image
+        self.image_inch_size = 10 # Needed only for matplotlib
+        
+        # Simulation properties
+        self.dt = 0.05 # seconds, simulation time step
+        self.action_dt = 1 #seconds, action time step
+        self.step_no = 0
         
         # Useful
         self.n_ac = self.n_intruders + 1
@@ -103,23 +111,35 @@ class ConflictArtEnv(gym.Env):
         return observation, info
     
     def step(self, action):
-        # Map the action (element of {0,1,2,3}) to the direction we walk in
+        # Map the action (element of {0,1,2,3}) to ownship acceleration
         accel = self._action_to_accel[action]
-        # We use `np.clip` to make sure we don't leave the grid
-        self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.size - 1
-        )
-        # An episode is done iff the agent has reached the target
-        terminated = np.array_equal(self._agent_location, self._target_location)
+        # Update the velocity of the ownship in function of this acceleration
+        self.ac_speeds[0] += accel * self.dt
+        # Update the positions of all aircraft
+        self.update_pos()
+        
+        # An episode is done if the agent has reached the target
+        terminated = False
         reward = 1 if terminated else 0  # Binary sparse rewards
         observation = self._get_obs()
         info = self._get_info()
 
         if self.render_mode == "human":
             self._render_frame()
+            
+        self.step_no += 1
 
         return observation, reward, terminated, False, info
     
+    def update_pos(self) -> None:
+        # Get the direction vectors for all aircraft directions
+        dir_v = self.ac_targets - self.ac_locations
+        # Get unit vector
+        unit_dir_v = np.transpose(dir_v.T / np.linalg.norm(dir_v, axis = 1))
+        # Now update position
+        self.ac_locations += np.transpose((self.ac_speeds * self.dt) * unit_dir_v.T)
+        return
+        
     def dist2target(self, acidx:int) -> float:
         """Returns the distance from the current location to the target
         for aircraft acidx.
@@ -145,8 +165,8 @@ class ConflictArtEnv(gym.Env):
         return np.linalg.norm(self.ac_locations[acidx] - self.ac_locations, axis=1)
         
     
-    def conflict_plot(self):
-        fig = plt.figure(frameon=False)
+    def conflict_plot(self) -> np.ndarray:
+        fig = plt.figure()
         fig.set_size_inches(self.image_inch_size,self.image_inch_size)
         fig.set_dpi(self.image_pixel_size / self.image_inch_size)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
@@ -165,13 +185,13 @@ class ConflictArtEnv(gym.Env):
         
         # Plot ownship info in green
         own_color = (0,1,0)
-        plt.scatter(self.ac_locations[0][0],
+        ax.scatter(self.ac_locations[0][0],
                     self.ac_locations[0][1], 
                     marker='o', 
                     color = own_color,
                     s = 300) # Location
         
-        plt.plot([self.ac_locations[0][0],
+        ax.plot([self.ac_locations[0][0],
                   self.ac_targets[0][0]], 
                  [self.ac_locations[0][1], 
                  self.ac_targets[0][1]],
@@ -181,13 +201,13 @@ class ConflictArtEnv(gym.Env):
         int_color = (1,0,0)
         for i in range(self.n_intruders):
             acidx = i + 1
-            plt.scatter(self.ac_locations[acidx][0],
+            ax.scatter(self.ac_locations[acidx][0],
                         self.ac_locations[acidx][1], 
                         marker='o', 
                         color = int_color,
                         s = 300) # Location
 
-            plt.plot([self.ac_locations[acidx][0],
+            ax.plot([self.ac_locations[acidx][0],
                     self.ac_targets[acidx][0]], 
                     [self.ac_locations[acidx][1], 
                     self.ac_targets[acidx][1]],
@@ -208,8 +228,10 @@ class ConflictArtEnv(gym.Env):
         rgb_array[self.image_pixel_size-1,:] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, 0] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
+        # Clear memory
         fig.clear()
         plt.close()
+        return rgb_array
     
     def render(self):
         if self.render_mode == "rgb_array":
@@ -315,6 +337,8 @@ class ConflictArtEnv(gym.Env):
 if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
+    for a in range(100):
+        env.step(0)
     #env.conflict_plot()
-    import timeit
-    print(timeit.timeit('env.conflict_plot()', number = 1000, globals = globals())/1000)
+    #import timeit
+    #print(timeit.timeit('env.conflict_plot()', number = 1000, globals = globals())/1000)
