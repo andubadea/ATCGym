@@ -122,8 +122,8 @@ class ConflictArtEnv(gym.Env):
         accel = self._action_to_accel[action]
         # Update the velocity of the ownship in function of this acceleration
         self.ac_speeds[0] += accel * self.dt
-        # If the speed is above or below the maximum speed, cap it
-        self.ac_speeds[0] = np.clip(self.ac_speeds[0], -self.max_speed, self.max_speed)
+        # If the speed is above or below 0, cap it
+        self.ac_speeds[0] = np.clip(self.ac_speeds[0], 0, self.max_speed)
         # Update the positions of all aircraft
         self.update_pos()
         
@@ -241,7 +241,7 @@ class ConflictArtEnv(gym.Env):
         int_color = (1,0,0) # Default red, used to trajectory lines
         int_spd_color = np.zeros((self.n_intruders, 3))
         int_spd_color[:,0] += 1 # By default intruders are red
-        int_spd_color[:,2] += (self.ac_speeds[1:] + self.max_speed)/(self.max_speed * 2) # Encode the speed in the blue channel
+        int_spd_color[:,2] += self.ac_speeds[1:]/self.max_speed # Encode the speed in the blue channel
     
         # Plot intruder info in red
         for i in range(self.n_intruders):
@@ -262,7 +262,7 @@ class ConflictArtEnv(gym.Env):
         # Plot ownship info in green
         # Encode its speed in the blue channel
         own_color = (0,1,0)
-        own_spd_color = (0,1, (self.ac_speeds[0]+ self.max_speed)/(self.max_speed*2))
+        own_spd_color = (0,1, self.ac_speeds[0]/self.max_speed)
         ax.scatter(self.ac_locations[0][0],
                     self.ac_locations[0][1], 
                     marker='o', 
@@ -299,12 +299,14 @@ class ConflictArtEnv(gym.Env):
         rgb_array[self.image_pixel_size-1,:] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, 0] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
+        # Invert all the colors, 255 becomes 0
+        rgb_array = np.abs(rgb_array-255)
         # Clear memory
         fig.clear()
         plt.close()
         if self.debug:
             fig_debug, ax = plt.subplots()
-            ax.imshow(rgb_array)
+            ax.imshow(rgb_array[:,:,:3])
             fig_debug.savefig(f'./debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
@@ -355,7 +357,7 @@ if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
     for a in range(200):
-        env.step(1)
+        env.step(0)
     #env.conflict_plot()
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
