@@ -42,7 +42,7 @@ class ConflictArtRelEnv(gym.Env):
         self.debug = False
         
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,1), dtype=np.uint8)
+        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
