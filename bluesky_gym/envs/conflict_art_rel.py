@@ -25,7 +25,7 @@ class ConflictArtRelEnv(gym.Env):
         self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 100 # Resolution of image
+        self.image_pixel_size = 64 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
