@@ -2,6 +2,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import pygame
+import os
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -15,23 +16,23 @@ class ConflictArtEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     def __init__(self, render_mode=None, n_intruders = 1):
         # Will want to eventually make these env properties
-        self.n_intruders = 9 # number of intruders to spawn
+        self.n_intruders = 4 # number of intruders to spawn
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 2 # m/s, constant acceleration magnitude
-        self.max_speed = 15 #m/s, maximum speed both backwards and forwards
-        self.default_speed = 10 #m/s, default speed for ownship
+        self.max_speed = 15 #m/s, maximum speed
+        self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 128 # Resolution of image
+        self.image_pixel_size = 100 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
         self.dt = 0.1 # seconds, simulation time step
         self.action_dt = 1 #seconds, action time step
         self.step_no = 0 #sim step counter
-        self.max_steps = 500 #maximum steps per episode
+        self.max_steps = 300 #maximum steps per episode
         
         # Useful calculated properties
         self.n_ac = self.n_intruders + 1
@@ -307,7 +308,8 @@ class ConflictArtEnv(gym.Env):
         if self.debug:
             fig_debug, ax = plt.subplots()
             ax.imshow(rgb_array[:,:,:3])
-            fig_debug.savefig(f'./debug/images/{self.step_no}.png')
+            dirname = os.path.dirname(__file__)
+            fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
         return rgb_array[:,:,:3]
@@ -356,8 +358,23 @@ class ConflictArtEnv(gym.Env):
 if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
-    for a in range(200):
-        env.step(0)
-    #env.conflict_plot()
+    # Test images
+    # for a in range(200):
+    #     env.step(0)
+    
+    # Test step time
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
+    rew_list = []
+    
+    # Test average dumb reward
+    for a in range(100):
+        env.reset()
+        rew_sum = 0
+        for b in range(300):
+            _, reward, terminated, _, _ = env.step(0)
+            rew_sum += reward
+            if terminated:
+                break
+        rew_list.append(rew_sum)
+    print(f'Dummy sum of expected rewards is {np.average(rew_list)}')
