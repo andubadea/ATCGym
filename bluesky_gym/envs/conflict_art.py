@@ -25,7 +25,7 @@ class ConflictArtEnv(gym.Env):
         self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 100 # Resolution of image
+        self.image_pixel_size = 64 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
@@ -39,7 +39,7 @@ class ConflictArtEnv(gym.Env):
         self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
         
         # Debugging mode
-        self.debug = False
+        self.debug = True
         
         # Build observation space dict, define it as an rgb image
         self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
@@ -359,22 +359,22 @@ if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
     # Test images
-    # for a in range(200):
-    #     env.step(0)
+    for a in range(200):
+        env.step(0)
     
     # Test step time
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
-    rew_list = []
     
     # Test average dumb reward
-    for a in range(100):
-        env.reset()
-        rew_sum = 0
-        for b in range(300):
-            _, reward, terminated, _, _ = env.step(0)
-            rew_sum += reward
-            if terminated:
-                break
-        rew_list.append(rew_sum)
-    print(f'Dummy sum of expected rewards is {np.average(rew_list)}')
+    # rew_list = []
+    # for a in range(100):
+    #     env.reset()
+    #     rew_sum = 0
+    #     for b in range(300):
+    #         _, reward, terminated, _, _ = env.step(0)
+    #         rew_sum += reward
+    #         if terminated:
+    #             break
+    #     rew_list.append(rew_sum)
+    # print(f'Dummy sum of expected rewards is {np.average(rew_list)}')
