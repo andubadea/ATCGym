@@ -39,7 +39,7 @@ class ConflictArtEnv(gym.Env):
         self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
         
         # Debugging mode
-        self.debug = True
+        self.debug = False
         
         # Build observation space dict, define it as an rgb image
         self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
