@@ -1,3 +1,4 @@
 bluesky_gym/envs/debug/*
 bluesky_gym/__pycache__/*
 bluesky_gym/envs/__pycache__/*
+out.log
