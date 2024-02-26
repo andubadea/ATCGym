@@ -39,10 +39,10 @@ class ConflictArtRelEnv(gym.Env):
         self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
         
         # Debugging mode
-        self.debug = False
+        self.debug = True
         
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size), dtype=np.uint8)
+        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size, 1), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -305,17 +305,19 @@ class ConflictArtRelEnv(gym.Env):
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
         # Invert all the colors, 255 becomes 0
         rgb_array = np.abs(rgb_array-255)
+        gray_array = self.rgb2gray(rgb_array[:,:,:3]).reshape((self.image_pixel_size, self.image_pixel_size, 1)).astype(np.uint8)
         # Clear memory
         fig.clear()
         plt.close()
         if self.debug:
             fig_debug, ax = plt.subplots()
-            ax.imshow(rgb_array[:,:,:3])
+            #ax.imshow(rgb_array[:,:,:3])
+            ax.imshow(gray_array, cmap='gray', vmin=0, vmax=255)
             dirname = os.path.dirname(__file__)
             fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
-        return self.rgb2gray(rgb_array[:,:,:3])
+        return gray_array
     
     @staticmethod
     def rgb2gray(rgb):
