@@ -27,7 +27,9 @@ if __name__ == "__main__":
     obs, info = env.reset()
 
     # Create the model
-    model = DQN("CnnPolicy", env, verbose=1, buffer_size=200000)
+    model = DQN("CnnPolicy", env, verbose=1, 
+                buffer_size=1000000,
+                optimize_memory_usage = True)
 
     # Train the model
     if TRAIN:
