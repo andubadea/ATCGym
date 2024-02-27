@@ -1,4 +1,4 @@
-import numpy as np
+import os
 import matplotlib.pyplot as plt
 
 def plot_out_log(filename):
@@ -25,11 +25,11 @@ def plot_out_log(filename):
     ax.set_xlabel('Number of timesteps')
     ax.set_ylabel('Sum of rewards')
     plt.show()
-    
-plot_out_log('output/out_rgb.log')
-plot_out_log('output/out_rel.log')
-plot_out_log('output/out_gry.log')
 
-'''
-scp sim6:~/Desktop/Andrei/BlueskyGym/\*.log  ./output/
-'''
+logfiles = os.listdir('output')
+
+for filename in logfiles:
+    if '.log' in filename:
+        plot_out_log(f'output/{filename}')
+
+#scp sim6:~/Desktop/Andrei/BlueskyGym/\*.log  ./output/

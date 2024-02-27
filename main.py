@@ -28,6 +28,7 @@ if __name__ == "__main__":
 
     # Create the model
     model = DQN("CnnPolicy", env, verbose=1, 
+                buffer_size = 500_000,
                 optimize_memory_usage = True,
                 replay_buffer_kwargs={"handle_timeout_termination": False})
 
