@@ -14,3 +14,9 @@ def register_envs():
         entry_point="bluesky_gym.envs.conflict_art_rel:ConflictArtRelEnv",
         max_episode_steps=300,
     )
+    
+    register(
+        id="ConflictArtRelGry-v0",
+        entry_point="bluesky_gym.envs.conflict_art_rel_gry:ConflictArtRelGryEnv",
+        max_episode_steps=300,
+    )

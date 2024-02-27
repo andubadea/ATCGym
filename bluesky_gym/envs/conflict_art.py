@@ -13,10 +13,12 @@ matplotlib.use('Agg')
 class ConflictArtEnv(gym.Env):
     """This environment creates conflicts with drones that need resolving.
     """
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
-    def __init__(self, render_mode=None, n_intruders = 1):
+    metadata = {"render_modes": ["human", "rgb_array"], 
+                "render_fps": 4, 
+                "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
+    def __init__(self, render_mode=None, n_intruders = 1, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
-        self.n_intruders = 4 # number of intruders to spawn
+        self.n_intruders = n_intruders # number of intruders to spawn
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
@@ -25,8 +27,8 @@ class ConflictArtEnv(gym.Env):
         self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 128 # Resolution of image
-        self.image_inch_size = 10 # Needed only for matplotlib
+        self.image_pixel_size = image_pixel_size # Resolution of image
+        self.image_inch_size = 10 # Needed only for matplotlib, don't change
         
         # Simulation properties
         self.dt = 0.1 # seconds, simulation time step
@@ -41,8 +43,14 @@ class ConflictArtEnv(gym.Env):
         # Debugging mode
         self.debug = False
         
+        assert image_mode in self.metadata["image_mode"]
+        self.image_mode = image_mode
+        
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
+        if image_mode == 'rgb' or image_mode == 'rel_rgb':
+            self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
+        elif image_mode == 'rel_gry':
+            self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,1), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -225,8 +233,16 @@ class ConflictArtEnv(gym.Env):
         fig.set_dpi(self.image_pixel_size / self.image_inch_size)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         # Set the axis limits
-        ax.set_xlim([0, self.playground_size])
-        ax.set_ylim([0, self.playground_size])
+        if 'rel' in self.image_mode:
+            # Relative images
+            ax.set_xlim([self.ac_locations[0][0] - self.playground_size / 2, 
+                     self.ac_locations[0][0] + self.playground_size / 2])
+            ax.set_ylim([self.ac_locations[0][1] - self.playground_size / 2, 
+                        self.ac_locations[0][1] + self.playground_size / 2])
+        else:
+            # Normal images
+            ax.set_xlim([0, self.playground_size])
+            ax.set_ylim([0, self.playground_size])
         # Ratio
         ax.set_aspect('equal')
         # Get rid of axes
@@ -302,17 +318,27 @@ class ConflictArtEnv(gym.Env):
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
         # Invert all the colors, 255 becomes 0
         rgb_array = np.abs(rgb_array-255)
+        if 'gry' in self.image_mode:
+            plot_array = self.rgb2gray(rgb_array[:,:,:3]).reshape((self.image_pixel_size, self.image_pixel_size, 1)).astype(np.uint8)
+        elif 'rgb' in self.image_mode:
+            plot_array = rgb_array[:,:,:3]
+        else:
+            plot_array = rgb_array
         # Clear memory
         fig.clear()
         plt.close()
         if self.debug:
             fig_debug, ax = plt.subplots()
-            ax.imshow(rgb_array[:,:,:3])
+            ax.imshow(plot_array)
             dirname = os.path.dirname(__file__)
             fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
-        return rgb_array[:,:,:3]
+        return plot_array
+    
+    @staticmethod
+    def rgb2gray(rgb):
+        return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
     
     def render(self):
         if self.render_mode == "rgb_array":
