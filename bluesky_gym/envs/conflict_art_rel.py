@@ -25,7 +25,7 @@ class ConflictArtRelEnv(gym.Env):
         self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 256 # Resolution of image
+        self.image_pixel_size = 128 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
@@ -42,7 +42,7 @@ class ConflictArtRelEnv(gym.Env):
         self.debug = False
         
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size, 1), dtype=np.uint8)
+        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size, 3), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -305,19 +305,18 @@ class ConflictArtRelEnv(gym.Env):
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
         # Invert all the colors, 255 becomes 0
         rgb_array = np.abs(rgb_array-255)
-        gray_array = self.rgb2gray(rgb_array[:,:,:3]).reshape((self.image_pixel_size, self.image_pixel_size, 1)).astype(np.uint8)
         # Clear memory
         fig.clear()
         plt.close()
         if self.debug:
             fig_debug, ax = plt.subplots()
             #ax.imshow(rgb_array[:,:,:3])
-            ax.imshow(gray_array, cmap='gray', vmin=0, vmax=255)
+            ax.imshow(rgb_array, cmap='gray', vmin=0, vmax=255)
             dirname = os.path.dirname(__file__)
             fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
-        return gray_array
+        return rgb_array[:,:,3]
     
     @staticmethod
     def rgb2gray(rgb):

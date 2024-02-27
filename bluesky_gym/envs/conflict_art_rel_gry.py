@@ -10,7 +10,7 @@ from typing import Tuple, Dict, Any, List
 matplotlib.rcParams['interactive'] = False
 matplotlib.use('Agg')
 
-class ConflictArtEnv(gym.Env):
+class ConflictArtRelGryEnv(gym.Env):
     """This environment creates conflicts with drones that need resolving.
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
@@ -25,7 +25,7 @@ class ConflictArtEnv(gym.Env):
         self.default_speed = 5 #m/s, starting speed for ownship
         
         # Image properties
-        self.image_pixel_size = 128 # Resolution of image
+        self.image_pixel_size = 256 # Resolution of image
         self.image_inch_size = 10 # Needed only for matplotlib
         
         # Simulation properties
@@ -42,7 +42,7 @@ class ConflictArtEnv(gym.Env):
         self.debug = False
         
         # Build observation space dict, define it as an rgb image
-        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
+        self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size, 1), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -224,9 +224,12 @@ class ConflictArtEnv(gym.Env):
         fig.set_size_inches(self.image_inch_size,self.image_inch_size)
         fig.set_dpi(self.image_pixel_size / self.image_inch_size)
         ax = plt.Axes(fig, [0., 0., 1., 1.])
-        # Set the axis limits
-        ax.set_xlim([0, self.playground_size])
-        ax.set_ylim([0, self.playground_size])
+        # Set the axis limits by centering around ownship
+        ax.set_xlim([self.ac_locations[0][0] - self.playground_size / 2, 
+                     self.ac_locations[0][0] + self.playground_size / 2])
+        ax.set_ylim([self.ac_locations[0][1] - self.playground_size / 2, 
+                     self.ac_locations[0][1] + self.playground_size / 2])
+        
         # Ratio
         ax.set_aspect('equal')
         # Get rid of axes
@@ -302,17 +305,23 @@ class ConflictArtEnv(gym.Env):
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
         # Invert all the colors, 255 becomes 0
         rgb_array = np.abs(rgb_array-255)
+        gray_array = self.rgb2gray(rgb_array[:,:,:3]).reshape((self.image_pixel_size, self.image_pixel_size, 1)).astype(np.uint8)
         # Clear memory
         fig.clear()
         plt.close()
         if self.debug:
             fig_debug, ax = plt.subplots()
-            ax.imshow(rgb_array[:,:,:3])
+            #ax.imshow(rgb_array[:,:,:3])
+            ax.imshow(gray_array, cmap='gray', vmin=0, vmax=255)
             dirname = os.path.dirname(__file__)
             fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
-        return rgb_array[:,:,:3]
+        return gray_array
+    
+    @staticmethod
+    def rgb2gray(rgb):
+        return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
     
     def render(self):
         if self.render_mode == "rgb_array":
@@ -356,7 +365,7 @@ class ConflictArtEnv(gym.Env):
 
 # Testing
 if __name__ == "__main__":
-    env = ConflictArtEnv()
+    env = ConflictArtRelEnv()
     env.reset()
     # Test images
     for a in range(200):
@@ -366,7 +375,7 @@ if __name__ == "__main__":
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
     
-    # Test average dumb reward
+    # Test average do-nothing reward
     # rew_list = []
     # for a in range(100):
     #     env.reset()
