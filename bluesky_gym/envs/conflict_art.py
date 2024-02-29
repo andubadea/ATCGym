@@ -364,7 +364,6 @@ class ConflictArtEnv(gym.Env):
         Returns:
             _type_: ndarray
         """
-        # TODO: If needed, make it not be O(n2)
         # Initialise coords array
         coords = np.zeros((self.n_ac, 2))
         # First starting point is random, set all as this point
@@ -382,31 +381,38 @@ class ConflictArtEnv(gym.Env):
 
 # Testing
 if __name__ == "__main__":
-    env = ConflictArtEnv()
+    # Variables
+    n_intruders = 4
+    image_mode = 'rgb'
+    image_pixel_size = 128
+    
+    # Make environment
+    env = ConflictArtEnv(None, n_intruders, image_mode, image_pixel_size)
     env.reset()
+    
     # Test images
-    # for a in range(200):
-    #     env.step(0)
+    for a in range(200):
+        env.step(0)
     
     # Test step time
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
     
     # Test average dumb reward
-    rolling_avg = []
-    rew_list = []
-    for a in range(10000):
-        env.reset()
-        rew_sum = 0
-        for b in range(300):
-            _, reward, terminated, _, _ = env.step(0)
-            rew_sum += reward
-            if terminated:
-                break
-        rew_list.append(rew_sum)
-        rolling_avg.append(np.average(rew_list))
-        while len(rolling_avg) > 1000:
-            rolling_avg.pop(0)
-    plt.figure()
-    plt.plot(range(len(rolling_avg)),rolling_avg)
-    plt.savefig('hi.png')
+    # rolling_avg = []
+    # rew_list = []
+    # for a in range(10000):
+    #     env.reset()
+    #     rew_sum = 0
+    #     for b in range(300):
+    #         _, reward, terminated, _, _ = env.step(0)
+    #         rew_sum += reward
+    #         if terminated:
+    #             break
+    #     rew_list.append(rew_sum)
+    #     rolling_avg.append(np.average(rew_list))
+    #     while len(rolling_avg) > 1000:
+    #         rolling_avg.pop(0)
+    # plt.figure()
+    # plt.plot(range(len(rolling_avg)),rolling_avg)
+    # plt.savefig('hi.png')
