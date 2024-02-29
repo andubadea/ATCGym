@@ -385,22 +385,28 @@ if __name__ == "__main__":
     env = ConflictArtEnv()
     env.reset()
     # Test images
-    for a in range(200):
-        env.step(0)
+    # for a in range(200):
+    #     env.step(0)
     
     # Test step time
     # import timeit
     # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
     
     # Test average dumb reward
-    # rew_list = []
-    # for a in range(100):
-    #     env.reset()
-    #     rew_sum = 0
-    #     for b in range(300):
-    #         _, reward, terminated, _, _ = env.step(0)
-    #         rew_sum += reward
-    #         if terminated:
-    #             break
-    #     rew_list.append(rew_sum)
-    # print(f'Dummy sum of expected rewards is {np.average(rew_list)}')
+    rolling_avg = []
+    rew_list = []
+    for a in range(10000):
+        env.reset()
+        rew_sum = 0
+        for b in range(300):
+            _, reward, terminated, _, _ = env.step(0)
+            rew_sum += reward
+            if terminated:
+                break
+        rew_list.append(rew_sum)
+        rolling_avg.append(np.average(rew_list))
+        while len(rolling_avg) > 1000:
+            rolling_avg.pop(0)
+    plt.figure()
+    plt.plot(range(len(rolling_avg)),rolling_avg)
+    plt.savefig('hi.png')
