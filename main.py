@@ -9,14 +9,14 @@ import bluesky_gym
 bluesky_gym.register_envs()
 # check_env(gym.make('ConflictArt-v0', render_mode=None))
 
-RL_MODEL = 'PPO', 
-IMAGE_MODE = 'rel_rgb', 
-N_INTRUDERS = 4, 
-IMAGE_SIZE = 128, 
-SEED = 42, 
-NUM_CPU = 4, 
-EVAL_EPISODES = 10, 
-TRAIN = True, 
+RL_MODEL = 'PPO'
+IMAGE_MODE = 'rel_rgb'
+N_INTRUDERS = 4
+IMAGE_SIZE = 128
+SEED = 42
+NUM_CPU = 4
+EVAL_EPISODES = 10
+TRAIN = True
 TEST = False
 
 class RLTrainer:
