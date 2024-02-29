@@ -9,10 +9,19 @@ import bluesky_gym
 bluesky_gym.register_envs()
 # check_env(gym.make('ConflictArt-v0', render_mode=None))
 
+RL_MODEL = 'PPO', 
+IMAGE_MODE = 'rel_rgb', 
+N_INTRUDERS = 4, 
+IMAGE_SIZE = 128, 
+SEED = 42, 
+NUM_CPU = 4, 
+EVAL_EPISODES = 10, 
+TRAIN = True, 
+TEST = False
+
 class RLTrainer:
     def __init__(self, model:str = 'DQN', image_mode:str = 'rgb', n_intruders:int = 4, image_size:int = 128, 
                  seed:int = 42, num_cpu:int = 4, eval_episodes:int = 10, train:bool = True, test:bool = False):
-        
         self.model=model
         self.image_mode=image_mode
         self.n_intruders=n_intruders
@@ -183,14 +192,14 @@ class RLTrainer:
     
     
 if __name__ == "__main__":
-    trainer = RLTrainer(model='PPO', 
-                        image_mode='rel_rgb', 
-                        n_intruders = 4, 
-                        image_size = 128, 
-                        seed = 42, 
-                        num_cpu = 4, 
-                        eval_episodes = 10, 
-                        train = True, 
-                        test = False)
+    trainer = RLTrainer(model=RL_MODEL, 
+                        image_mode=IMAGE_MODE, 
+                        n_intruders = N_INTRUDERS, 
+                        image_size = IMAGE_SIZE, 
+                        seed = SEED, 
+                        num_cpu = NUM_CPU, 
+                        eval_episodes = EVAL_EPISODES, 
+                        train = TRAIN, 
+                        test = TEST)
     
     trainer.run()
