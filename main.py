@@ -5,9 +5,9 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 import numpy as np
-import bluesky_gym
+import atc_gym
 
-bluesky_gym.register_envs()
+atc_gym.register_envs()
 # check_env(gym.make('ConflictArt-v0', render_mode=None))
 
 RL_MODEL = 'PPO'
@@ -32,9 +32,11 @@ class RLTrainer:
         self.eval_episodes=eval_episodes
         self.train=train 
         self.test=test
+        
+        # Counter
+        self.env_no = 0
 
     def run(self) -> None:
-        
         ############ DQN models ############
         if self.model in ['DQN','dqn']:
             if self.train:
@@ -60,17 +62,10 @@ class RLTrainer:
             print(f'Model {self.model} not implemented.')
             return
 
-    def PPO_train(self) -> None:
-        env_args = {'image_mode':self.image_mode, 
-                    'n_intruders' : self.n_intruders, 
-                    'image_pixel_size' : self.image_size
-                    }
-        
+    def PPO_train(self) -> None:       
         # Create the vectorised environments
-        vec_env = make_vec_env('ConflictArt-v0', 
-                               n_envs = self.num_cpu,
-                               env_kwargs=env_args,
-                               seed = self.seed)
+        vec_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu)
         
         # Get the model
         model = PPO("CnnPolicy", vec_env, verbose = 1)
@@ -134,8 +129,6 @@ class RLTrainer:
         
         env.close()
         
-        
-        
     def DQN_train(self) -> None:
         # Create the environment
         env = gym.make('ConflictArt-v0', 
@@ -177,7 +170,24 @@ class RLTrainer:
                 obs, reward, done, truncated, info = env.step(action[()])
         
         env.close()
-    
+        
+    def make_env(self):
+        """
+        Utility function for multiprocessed env.
+        :param env_id: the environment ID
+        :param num_env: the number of environments you wish to have in subprocesses
+        :param seed: the inital seed for RNG
+        :param rank: index of the subprocess
+        """
+        env = gym.make('ConflictArt-v0', 
+                render_mode=None, 
+                n_intruders = self.n_intruders,
+                image_mode = self.image_mode,
+                image_pixel_size = self.image_size)
+
+        env.reset(seed=self.seed + self.env_no)
+        self.env_no +=1 
+        return env
     
 if __name__ == "__main__":
     trainer = RLTrainer(model=RL_MODEL, 

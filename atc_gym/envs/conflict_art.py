@@ -34,7 +34,7 @@ class ConflictArtEnv(gym.Env):
         self.dt = 0.1 # seconds, simulation time step
         self.action_dt = 1 #seconds, action time step
         self.step_no = 0 #sim step counter
-        self.max_steps = 300 #maximum steps per episode
+        self.max_steps = 500 #maximum steps per episode
         
         # Useful calculated properties
         self.n_ac = self.n_intruders + 1
