@@ -3,7 +3,7 @@ from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import numpy as np
 import atc_gym
 
@@ -65,7 +65,8 @@ class RLTrainer:
     def PPO_train(self) -> None:       
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu)
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
         
         # Get the model
         model = PPO("CnnPolicy", vec_env, verbose = 1)
@@ -98,7 +99,9 @@ class RLTrainer:
         
     def A2C_train(self) -> None:
         # Create the vectorised environments
-        vec_env = SubprocVecEnv([self.make_env('ConflictArt-v0', i) for i in range(self.num_cpu)])
+        vec_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
         
         # Get the model
         model = A2C("CnnPolicy", vec_env, verbose = 1)
