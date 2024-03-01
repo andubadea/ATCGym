@@ -16,22 +16,25 @@ N_INTRUDERS = 4
 IMAGE_SIZE = 128
 SEED = 42
 NUM_CPU = 4
+TRAIN_EPISODES = int(3e6)
 EVAL_EPISODES = 10
 TRAIN = True
 TEST = False
 
 class RLTrainer:
     def __init__(self, model:str = 'DQN', image_mode:str = 'rgb', n_intruders:int = 4, image_size:int = 128, 
-                 seed:int = 42, num_cpu:int = 4, eval_episodes:int = 10, train:bool = True, test:bool = False):
-        self.model=model
-        self.image_mode=image_mode
-        self.n_intruders=n_intruders
-        self.image_size=image_size
-        self.seed=42
-        self.num_cpu=num_cpu
-        self.eval_episodes=eval_episodes
-        self.train=train 
-        self.test=test
+                 seed:int = 42, num_cpu:int = 4, train_episodes:int = 1000, eval_episodes:int = 10, 
+                 train:bool = True, test:bool = False):
+        self.model = model
+        self.image_mode = image_mode
+        self.n_intruders = n_intruders
+        self.image_size = image_size
+        self.seed = 42
+        self.num_cpu = num_cpu
+        self.train_episodes = train_episodes
+        self.eval_episodes = eval_episodes
+        self.train = train 
+        self.test = test
         
         # Counter
         self.env_no = 0
@@ -72,7 +75,7 @@ class RLTrainer:
         model = PPO("CnnPolicy", vec_env, verbose = 1)
         
         # Train it
-        model.learn(total_timesteps=int(3e6))
+        model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
         model.save(f"models/ConflictArt-v0_{self.image_mode}_ppo/model")
@@ -107,7 +110,7 @@ class RLTrainer:
         model = A2C("CnnPolicy", vec_env, verbose = 1)
         
         # Train it
-        model.learn(total_timesteps=int(3e6))
+        model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
         model.save(f"models/ConflictArt-v0_{self.image_mode}_a2c/model")
@@ -150,7 +153,7 @@ class RLTrainer:
                     replay_buffer_kwargs={"handle_timeout_termination": False})
 
         # Train the model
-        model.learn(total_timesteps=int(3e6))
+        model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
         model.save(f"models/ConflictArt-v0_{self.image_mode}_dqn/model")
@@ -199,6 +202,7 @@ if __name__ == "__main__":
                         image_size = IMAGE_SIZE, 
                         seed = SEED, 
                         num_cpu = NUM_CPU, 
+                        train_episodes = TRAIN_EPISODES,
                         eval_episodes = EVAL_EPISODES, 
                         train = TRAIN, 
                         test = TEST)
