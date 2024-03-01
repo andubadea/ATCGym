@@ -1,6 +1,7 @@
 import gymnasium as gym
 from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 import numpy as np
@@ -60,8 +61,16 @@ class RLTrainer:
             return
 
     def PPO_train(self) -> None:
+        env_args = {'image_mode':self.image_mode, 
+                    'n_intruders' : self.n_intruders, 
+                    'image_pixel_size' : self.image_size
+                    }
+        
         # Create the vectorised environments
-        vec_env = DummyVecEnv([self.make_env('ConflictArt-v0', i) for i in range(self.num_cpu)])
+        vec_env = make_vec_env('ConflictArt-v0', 
+                               n_envs = self.num_cpu,
+                               env_kwargs=env_args,
+                               seed = self.seed)
         
         # Get the model
         model = PPO("CnnPolicy", vec_env, verbose = 1)
@@ -168,27 +177,6 @@ class RLTrainer:
                 obs, reward, done, truncated, info = env.step(action[()])
         
         env.close()
-        
-    def make_env(self, env_id: str, rank: int):
-        """
-        Utility function for multiprocessed env.
-
-        :param env_id: the environment ID
-        :param num_env: the number of environments you wish to have in subprocesses
-        :param seed: the inital seed for RNG
-        :param rank: index of the subprocess
-        """
-        def _init():
-            env = gym.make('ConflictArt-v0', 
-                    render_mode=None, 
-                    n_intruders = self.n_intruders,
-                    image_mode = self.image_mode,
-                    image_pixel_size = self.image_size)
-            
-            env.reset(seed=self.seed + rank)
-            return env
-        set_random_seed(self.seed)
-        return _init
     
     
 if __name__ == "__main__":
