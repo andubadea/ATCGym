@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 class ConflictArtEnv(gym.Env):
     """This environment creates conflicts with drones that need resolving.
     """
-    metadata = {"render_modes": ["human", "rgb_array"], 
+    metadata = {"render_modes": ["images"], 
                 "render_fps": 4, 
                 "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
     def __init__(self, render_mode=None, n_intruders = 1, image_mode = 'rgb', image_pixel_size = 128):
@@ -39,9 +39,6 @@ class ConflictArtEnv(gym.Env):
         # Useful calculated properties
         self.n_ac = self.n_intruders + 1
         self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
-        
-        # Debugging mode
-        self.debug = False
         
         assert image_mode in self.metadata["image_mode"]
         self.image_mode = image_mode
@@ -121,9 +118,6 @@ class ConflictArtEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "human":
-            self._render_frame()
-
         return observation, info
     
     def step(self, action):
@@ -155,19 +149,16 @@ class ConflictArtEnv(gym.Env):
         # Get needed info
         observation = self._get_obs()
         info = self._get_info()
-
-        if self.render_mode == "human":
-            self._render_frame()
         
-        if self.debug:
-            print(f'\n----- Step {self.step_no} -----')
-            print(f'Distance to target: {own_dist2goal}')
-            print(f'Distance to others: {own_dist2others}')
-            print(f'Acceleration: {accel}')
-            print(f'Speed: {self.ac_speeds[0]}')
-            print(f'Intrusion: {intrusion}')
-            print(f'Reward: {reward}')
-            print(f'Terminated: {terminated}')
+        # if self.debug:
+        #     print(f'\n----- Step {self.step_no} -----')
+        #     print(f'Distance to target: {own_dist2goal}')
+        #     print(f'Distance to others: {own_dist2others}')
+        #     print(f'Acceleration: {accel}')
+        #     print(f'Speed: {self.ac_speeds[0]}')
+        #     print(f'Intrusion: {intrusion}')
+        #     print(f'Reward: {reward}')
+        #     print(f'Terminated: {terminated}')
         
         self.step_no += 1
         
@@ -327,7 +318,7 @@ class ConflictArtEnv(gym.Env):
         # Clear memory
         fig.clear()
         plt.close()
-        if self.debug:
+        if self.render_mode == "images":
             fig_debug, ax = plt.subplots()
             ax.imshow(plot_array)
             dirname = os.path.dirname(__file__)
@@ -339,14 +330,6 @@ class ConflictArtEnv(gym.Env):
     @staticmethod
     def rgb2gray(rgb):
         return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
-    
-    def render(self):
-        if self.render_mode == "rgb_array":
-            return self._render_frame()
-
-    def _render_frame(self):
-        # TODO: This
-        pass
         
     def close(self):
         if self.window is not None:
