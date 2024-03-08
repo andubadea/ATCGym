@@ -91,7 +91,11 @@ class RLTrainer:
                 env = make_vec_env(self.make_env, 
                                 n_envs = self.num_cpu,
                                 vec_env_cls=SubprocVecEnv)
-                return DQN("CnnPolicy", env, verbose = 1), env
+                model = DQN("CnnPolicy", env, verbose = 1, 
+                            buffer_size=self.buffer_size,
+                            optimize_memory_usage=True,
+                            replay_buffer_kwargs={"handle_timeout_termination":False})
+                return model, env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -108,7 +112,8 @@ class RLTrainer:
                 env = make_vec_env(self.make_env, 
                                 n_envs = self.num_cpu,
                                 vec_env_cls=SubprocVecEnv)
-                return PPO("CnnPolicy", env, verbose = 1), env
+                model = PPO("CnnPolicy", env, verbose = 1)
+                return model, env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -125,7 +130,8 @@ class RLTrainer:
                 env = make_vec_env(self.make_env, 
                                 n_envs = self.num_cpu,
                                 vec_env_cls=SubprocVecEnv)
-                return A2C("CnnPolicy", env, verbose = 1), env
+                model = A2C("CnnPolicy", env, verbose = 1)
+                return model, env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
