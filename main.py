@@ -8,6 +8,7 @@ import os
 import re
 import atc_gym
 import imageio.v2 as imageio
+from typing import Any
 
 atc_gym.register_envs()
 #check_env(gym.make('ConflictUrbanArt-v0', render_mode=None))
@@ -29,7 +30,7 @@ class RLTrainer:
     def __init__(self, env:str, model:str = 'DQN', buffer_size:int = 500_000, image_mode:str = 'rgb', 
                  n_intruders:int = 4, image_size:int = 128, seed:int = 42, num_cpu:int = 4, 
                  train_episodes:int = 1000, eval_episodes:int = 10, train:bool = True,
-                 render_mode:str = None):
+                 render_mode:str = None) -> None:
         self.env = env
         self.model = model
         self.buffer_size = buffer_size
@@ -43,192 +44,100 @@ class RLTrainer:
         self.train = train 
         self.render_mode = render_mode
         
-        # Counter
+        # Model save and load path
+        self.model_path = f"models/{self.env}_{self.image_mode}_{n_intruders}_{self.model}/"
+        
+        # Env counter
         self.env_no = 0
 
     def run(self) -> None:
-        # Delete existing images if any
-        if not self.train:
-            # Attempt to delete all existing images
+        # Get the model and the env
+        model, env = self.get_model()
+        if self.train:
+            # Train then
+            model.learn(total_timesteps=int(self.train_episodes))
+            # Save final model
+            model.save(self.model_path + "model")
+            
+        elif self.render_mode is not None:
+            # Attempt to delete all existing images in the debug folder
             to_delete = 'atc_gym/envs/debug/images/'
             for filename in os.listdir(to_delete):
                 os.remove(to_delete + filename)
             
-        ############ DQN models ############
+            # Do the eval
+            for i in range(self.eval_episodes):
+                done = truncated = False
+                obs, info = env.reset()
+                while not (done or truncated):
+                    # Predict
+                    action, _states = model.predict(obs, deterministic=True)
+                    # Get reward
+                    obs, reward, done, truncated, info = env.step(action[()])
+            
+            # Make a gif
+            self.make_gif()
+        else:
+            pass
+        
+        # Wrap up
+        env.close()
+        del model
+            
+    def get_model(self) -> Any:
         if self.model in ['DQN','dqn']:
             if self.train:
-                self.DQN_train()
+                # We train, make a vectorised environment
+                env = make_vec_env(self.make_env, 
+                                n_envs = self.num_cpu,
+                                vec_env_cls=SubprocVecEnv)
+                return DQN("CnnPolicy", env, verbose = 1), env
             else:
-                self.DQN_test()
+                # Make a test environment
+                env = gym.make(self.env, 
+                            render_mode=self.render_mode, 
+                            n_intruders = self.n_intruders,
+                            image_mode = self.image_mode,
+                            image_pixel_size = self.image_size)
+                return DQN.load(self.model_path + "model", env=env), env
         
         ############ PPO models ############
         elif self.model in ['PPO','ppo']:
             if self.train:
-                self.PPO_train()
+                # We train, make a vectorised environment
+                env = make_vec_env(self.make_env, 
+                                n_envs = self.num_cpu,
+                                vec_env_cls=SubprocVecEnv)
+                return PPO("CnnPolicy", env, verbose = 1), env
             else:
-                self.PPO_test()
+                # Make a test environment
+                env = gym.make(self.env, 
+                            render_mode=self.render_mode, 
+                            n_intruders = self.n_intruders,
+                            image_mode = self.image_mode,
+                            image_pixel_size = self.image_size)
+                return PPO.load(self.model_path + "model", env=env), env
         
         ############ A2C models ############
         elif self.model in ['A2C', 'a2c']:
             if self.train:
-                self.A2C_train()
+                # We train, make a vectorised environment
+                env = make_vec_env(self.make_env, 
+                                n_envs = self.num_cpu,
+                                vec_env_cls=SubprocVecEnv)
+                return A2C("CnnPolicy", env, verbose = 1), env
             else:
-                self.A2C_test()
-        
+                # Make a test environment
+                env = gym.make(self.env, 
+                            render_mode=self.render_mode, 
+                            n_intruders = self.n_intruders,
+                            image_mode = self.image_mode,
+                            image_pixel_size = self.image_size)
+                return A2C.load(self.model_path + "model", env=env), env
+            
         else:
             print(f'Model {self.model} not implemented.')
-            return
-        
-        if not self.train and self.render_mode is not None:
-            # Make the gif
-            self.make_gif()
-
-    def PPO_train(self) -> None:     
-        # Create the vectorised environments
-        vec_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        
-        # Create best model saving callback
-        eval_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=1000, deterministic=True, render=False)
-        
-        # Get the model
-        model = PPO("CnnPolicy", vec_env, verbose = 1)
-        
-        # Train it
-        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
-        
-        # Save final model
-        model.save(model_path + "model_final")
-        del model
-        
-        # Close it
-        vec_env.close()
-        
-    def PPO_test(self) -> None:
-        #Test the trained model
-        env = gym.make(self.env, 
-                render_mode=self.render_mode, 
-                n_intruders = self.n_intruders,
-                image_mode = self.image_mode,
-                image_pixel_size = self.image_size)
-        
-        model = PPO.load(f"models/{self.env}_{self.image_mode}_ppo/model", env=env)
-
-        for i in range(self.eval_episodes):
-            done = truncated = False
-            obs, info = env.reset()
-            while not (done or truncated):
-                # Predict
-                action, _states = model.predict(obs, deterministic=True)
-                # Get reward
-                obs, reward, done, truncated, info = env.step(action[()])
-        
-        env.close()
-        
-    def A2C_train(self) -> None:
-        # Create the vectorised environments
-        vec_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        
-        # Create best model saving callback
-        eval_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=1000, deterministic=True, render=False)
-        
-        # Get the model
-        model = A2C("CnnPolicy", vec_env, verbose = 1)
-        
-        # Train it
-        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
-        
-        # Save it
-        model.save(model_path + "model_final")
-        del model
-        
-        # Close it
-        vec_env.close()
-        
-    def A2C_test(self) -> None:
-        #Test the trained model
-        env = gym.make(self.env, 
-                render_mode=self.render_mode, 
-                n_intruders = self.n_intruders,
-                image_mode = self.image_mode,
-                image_pixel_size = self.image_size)
-        
-        model = A2C.load(f"models/{self.env}_{self.image_mode}_a2c/model", env=env)
-
-        for i in range(self.eval_episodes):
-            done = truncated = False
-            obs, info = env.reset()
-            while not (done or truncated):
-                # Predict
-                action, _states = model.predict(obs, deterministic=True)
-                # Get reward
-                obs, reward, done, truncated, info = env.step(action[()])
-        
-        env.close()
-        
-    def DQN_train(self) -> None:
-        # Create the vectorised environments
-        vec_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        
-        # Create best model saving callback
-        eval_env = make_vec_env(self.make_env, 
-                               n_envs = self.num_cpu,
-                               vec_env_cls=SubprocVecEnv)
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=1000, deterministic=True, render=False)
-        
-        # Get the model
-        model = DQN("CnnPolicy", vec_env, verbose=1, 
-                    buffer_size = self.buffer_size,
-                    optimize_memory_usage = True,
-                    replay_buffer_kwargs={"handle_timeout_termination": False})
-        
-        # Train it
-        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
-        
-        # Save it
-        model.save(model_path + "model_final")
-        del model
-        
-        # Close it
-        vec_env.close()
-        
-    def DQN_test(self) -> None:
-        #Test the trained model
-        env = gym.make(self.env, 
-                render_mode=self.render_mode, 
-                n_intruders = self.n_intruders,
-                image_mode = self.image_mode,
-                image_pixel_size = self.image_size)
-        
-        model = DQN.load(f"models/{self.env}_{self.image_mode}_dqn/model", env=env)
-
-        for i in range(self.eval_episodes):
-            done = truncated = False
-            obs, info = env.reset()
-            while not (done or truncated):
-                # Predict
-                action, _states = model.predict(obs, deterministic=True)
-                # Make steps
-                obs, reward, done, truncated, info = env.step(action[()])
-        
-        env.close()
+            return None
         
     def make_env(self):
         """
