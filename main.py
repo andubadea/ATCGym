@@ -84,18 +84,18 @@ class RLTrainer:
             self.make_gif()
 
     def PPO_train(self) -> None:     
-        # Create an eval environment
-        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
-                image_mode = self.image_mode, image_pixel_size = self.image_size)
-        # Create best model saving callback
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=100000, deterministic=True, render=False)
-        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
                                vec_env_cls=SubprocVecEnv)
+        
+        # Create best model saving callback
+        eval_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=1000, deterministic=True, render=False)
         
         # Get the model
         model = PPO("CnnPolicy", vec_env, verbose = 1)
@@ -132,18 +132,18 @@ class RLTrainer:
         env.close()
         
     def A2C_train(self) -> None:
-        # Create an eval environment
-        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
-                image_mode = self.image_mode, image_pixel_size = self.image_size)
-        # Create best model saving callback
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=100000, deterministic=True, render=False)
-        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
                                vec_env_cls=SubprocVecEnv)
+        
+        # Create best model saving callback
+        eval_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=1000, deterministic=True, render=False)
         
         # Get the model
         model = A2C("CnnPolicy", vec_env, verbose = 1)
@@ -180,18 +180,18 @@ class RLTrainer:
         env.close()
         
     def DQN_train(self) -> None:
-        # Create an eval environment
-        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
-                image_mode = self.image_mode, image_pixel_size = self.image_size)
-        # Create best model saving callback
-        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
-        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
-                                     eval_freq=100000, deterministic=True, render=False)
-        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
                                vec_env_cls=SubprocVecEnv)
+        
+        # Create best model saving callback
+        eval_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=1000, deterministic=True, render=False)
         
         # Get the model
         model = DQN("CnnPolicy", vec_env, verbose=1, 
