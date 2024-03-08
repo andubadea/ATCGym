@@ -2,28 +2,28 @@ import gymnasium as gym
 from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.callbacks import EvalCallback
 import os
 import re
 import atc_gym
 import imageio.v2 as imageio
 
 atc_gym.register_envs()
-# check_env(gym.make('ConflictArt-v0', render_mode=None))
+#check_env(gym.make('ConflictUrbanArt-v0', render_mode=None))
 
-ENV = 'ConflictArt-v0'
-RL_MODEL = 'DQN'
+ENV = 'ConflictUrbanArt-v0'
+RL_MODEL = 'PPO'
 IMAGE_MODE = 'rel_rgb'
 DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
 N_INTRUDERS = 4
 IMAGE_SIZE = 128
 SEED = 42
-NUM_CPU = 4
-RENDER_MODE = 'images' # None means no images, images means images
-TRAIN_EPISODES = int(3e6)
-EVAL_EPISODES = 1
-TRAIN = False
+NUM_CPU = 16
+RENDER_MODE = None # None means no images, images means images
+TRAIN_EPISODES = int(3e7)
+EVAL_EPISODES = 10
+TRAIN = True
 
 class RLTrainer:
     def __init__(self, env:str, model:str = 'DQN', buffer_size:int = 500_000, image_mode:str = 'rgb', 
@@ -83,7 +83,15 @@ class RLTrainer:
             # Make the gif
             self.make_gif()
 
-    def PPO_train(self) -> None:       
+    def PPO_train(self) -> None:     
+        # Create an eval environment
+        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
+                image_mode = self.image_mode, image_pixel_size = self.image_size)
+        # Create best model saving callback
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=100000, deterministic=True, render=False)
+        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
@@ -93,10 +101,10 @@ class RLTrainer:
         model = PPO("CnnPolicy", vec_env, verbose = 1)
         
         # Train it
-        model.learn(total_timesteps=int(self.train_episodes))
+        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
         
-        # Save it
-        model.save(f"models/{self.env}_{self.image_mode}_ppo/model")
+        # Save final model
+        model.save(model_path + "model_final")
         del model
         
         # Close it
@@ -124,6 +132,14 @@ class RLTrainer:
         env.close()
         
     def A2C_train(self) -> None:
+        # Create an eval environment
+        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
+                image_mode = self.image_mode, image_pixel_size = self.image_size)
+        # Create best model saving callback
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=100000, deterministic=True, render=False)
+        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
@@ -133,10 +149,10 @@ class RLTrainer:
         model = A2C("CnnPolicy", vec_env, verbose = 1)
         
         # Train it
-        model.learn(total_timesteps=int(self.train_episodes))
+        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
         
         # Save it
-        model.save(f"models/{self.env}_{self.image_mode}_a2c/model")
+        model.save(model_path + "model_final")
         del model
         
         # Close it
@@ -164,7 +180,14 @@ class RLTrainer:
         env.close()
         
     def DQN_train(self) -> None:
-        # Create the environment
+        # Create an eval environment
+        eval_env = gym.make(self.env, render_mode=self.render_mode, n_intruders = self.n_intruders,
+                image_mode = self.image_mode, image_pixel_size = self.image_size)
+        # Create best model saving callback
+        model_path = f"models/{self.env}_{self.image_mode}_{self.model}/"
+        eval_callback = EvalCallback(eval_env, best_model_save_path=model_path + "model", 
+                                     eval_freq=100000, deterministic=True, render=False)
+        
         # Create the vectorised environments
         vec_env = make_vec_env(self.make_env, 
                                n_envs = self.num_cpu,
@@ -177,10 +200,10 @@ class RLTrainer:
                     replay_buffer_kwargs={"handle_timeout_termination": False})
         
         # Train it
-        model.learn(total_timesteps=int(self.train_episodes))
+        model.learn(total_timesteps=int(self.train_episodes), callback=eval_callback)
         
         # Save it
-        model.save(f"models/{self.env}_{self.image_mode}_a2c/model")
+        model.save(model_path + "model_final")
         del model
         
         # Close it
