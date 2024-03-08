@@ -8,3 +8,9 @@ def register_envs():
         entry_point="atc_gym.envs.conflict_art:ConflictArtEnv",
         max_episode_steps=500,
     )
+    
+    register(
+        id="ConflictUrbanArt-v0",
+        entry_point="atc_gym.envs.conflict_urban_art:ConflictUrbanArtEnv",
+        max_episode_steps=500,
+    )

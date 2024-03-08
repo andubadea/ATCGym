@@ -12,23 +12,27 @@ import imageio.v2 as imageio
 atc_gym.register_envs()
 # check_env(gym.make('ConflictArt-v0', render_mode=None))
 
+ENV = 'ConflictArt-v0'
 RL_MODEL = 'DQN'
 IMAGE_MODE = 'rel_rgb'
+DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
 N_INTRUDERS = 4
 IMAGE_SIZE = 128
 SEED = 42
 NUM_CPU = 4
-RENDER_MODE = None # None means no images, images means images
+RENDER_MODE = 'images' # None means no images, images means images
 TRAIN_EPISODES = int(3e6)
 EVAL_EPISODES = 1
-TRAIN = True
-TEST = False
+TRAIN = False
 
 class RLTrainer:
-    def __init__(self, model:str = 'DQN', image_mode:str = 'rgb', n_intruders:int = 4, image_size:int = 128, 
-                 seed:int = 42, num_cpu:int = 4, train_episodes:int = 1000, eval_episodes:int = 10, 
-                 train:bool = True, test:bool = False, render_mode:str = None):
+    def __init__(self, env:str, model:str = 'DQN', buffer_size:int = 500_000, image_mode:str = 'rgb', 
+                 n_intruders:int = 4, image_size:int = 128, seed:int = 42, num_cpu:int = 4, 
+                 train_episodes:int = 1000, eval_episodes:int = 10, train:bool = True,
+                 render_mode:str = None):
+        self.env = env
         self.model = model
+        self.buffer_size = buffer_size
         self.image_mode = image_mode
         self.n_intruders = n_intruders
         self.image_size = image_size
@@ -37,7 +41,6 @@ class RLTrainer:
         self.train_episodes = train_episodes
         self.eval_episodes = eval_episodes
         self.train = train 
-        self.test = test
         self.render_mode = render_mode
         
         # Counter
@@ -45,7 +48,7 @@ class RLTrainer:
 
     def run(self) -> None:
         # Delete existing images if any
-        if self.test:
+        if not self.train:
             # Attempt to delete all existing images
             to_delete = 'atc_gym/envs/debug/images/'
             for filename in os.listdir(to_delete):
@@ -55,28 +58,28 @@ class RLTrainer:
         if self.model in ['DQN','dqn']:
             if self.train:
                 self.DQN_train()
-            if self.test:
+            else:
                 self.DQN_test()
         
         ############ PPO models ############
         elif self.model in ['PPO','ppo']:
             if self.train:
                 self.PPO_train()
-            if self.test:
+            else:
                 self.PPO_test()
         
         ############ A2C models ############
         elif self.model in ['A2C', 'a2c']:
             if self.train:
                 self.A2C_train()
-            if self.test:
+            else:
                 self.A2C_test()
         
         else:
             print(f'Model {self.model} not implemented.')
             return
         
-        if self.test and self.render_mode is not None:
+        if not self.train and self.render_mode is not None:
             # Make the gif
             self.make_gif()
 
@@ -93,7 +96,7 @@ class RLTrainer:
         model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
-        model.save(f"models/ConflictArt-v0_{self.image_mode}_ppo/model")
+        model.save(f"models/{self.env}_{self.image_mode}_ppo/model")
         del model
         
         # Close it
@@ -101,13 +104,13 @@ class RLTrainer:
         
     def PPO_test(self) -> None:
         #Test the trained model
-        env = gym.make('ConflictArt-v0', 
+        env = gym.make(self.env, 
                 render_mode=self.render_mode, 
                 n_intruders = self.n_intruders,
                 image_mode = self.image_mode,
                 image_pixel_size = self.image_size)
         
-        model = PPO.load(f"models/ConflictArt-v0_{self.image_mode}_ppo/model", env=env)
+        model = PPO.load(f"models/{self.env}_{self.image_mode}_ppo/model", env=env)
 
         for i in range(self.eval_episodes):
             done = truncated = False
@@ -133,7 +136,7 @@ class RLTrainer:
         model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
-        model.save(f"models/ConflictArt-v0_{self.image_mode}_a2c/model")
+        model.save(f"models/{self.env}_{self.image_mode}_a2c/model")
         del model
         
         # Close it
@@ -141,13 +144,13 @@ class RLTrainer:
         
     def A2C_test(self) -> None:
         #Test the trained model
-        env = gym.make('ConflictArt-v0', 
+        env = gym.make(self.env, 
                 render_mode=self.render_mode, 
                 n_intruders = self.n_intruders,
                 image_mode = self.image_mode,
                 image_pixel_size = self.image_size)
         
-        model = A2C.load(f"models/ConflictArt-v0_{self.image_mode}_a2c/model", env=env)
+        model = A2C.load(f"models/{self.env}_{self.image_mode}_a2c/model", env=env)
 
         for i in range(self.eval_episodes):
             done = truncated = False
@@ -162,39 +165,36 @@ class RLTrainer:
         
     def DQN_train(self) -> None:
         # Create the environment
-        env = gym.make('ConflictArt-v0', 
-                    render_mode=self.render_mode, 
-                    n_intruders = self.n_intruders,
-                    image_mode = self.image_mode,
-                    image_pixel_size = self.image_size)
+        # Create the vectorised environments
+        vec_env = make_vec_env(self.make_env, 
+                               n_envs = self.num_cpu,
+                               vec_env_cls=SubprocVecEnv)
         
-        # Set the random seed
-        env.reset(self.seed)
-
-        # Create the model
-        model = DQN("CnnPolicy", env, verbose=1, 
-                    buffer_size = 500_000,
+        # Get the model
+        model = DQN("CnnPolicy", vec_env, verbose=1, 
+                    buffer_size = self.buffer_size,
                     optimize_memory_usage = True,
                     replay_buffer_kwargs={"handle_timeout_termination": False})
-
-        # Train the model
+        
+        # Train it
         model.learn(total_timesteps=int(self.train_episodes))
         
         # Save it
-        model.save(f"models/ConflictArt-v0_{self.image_mode}_dqn/model")
+        model.save(f"models/{self.env}_{self.image_mode}_a2c/model")
         del model
-
-        env.close()
+        
+        # Close it
+        vec_env.close()
         
     def DQN_test(self) -> None:
         #Test the trained model
-        env = gym.make('ConflictArt-v0', 
+        env = gym.make(self.env, 
                 render_mode=self.render_mode, 
                 n_intruders = self.n_intruders,
                 image_mode = self.image_mode,
                 image_pixel_size = self.image_size)
         
-        model = DQN.load(f"models/ConflictArt-v0_{self.image_mode}_dqn/model", env=env)
+        model = DQN.load(f"models/{self.env}_{self.image_mode}_dqn/model", env=env)
 
         for i in range(self.eval_episodes):
             done = truncated = False
@@ -215,7 +215,7 @@ class RLTrainer:
         :param seed: the inital seed for RNG
         :param rank: index of the subprocess
         """
-        env = gym.make('ConflictArt-v0', 
+        env = gym.make(self.env, 
                 render_mode=self.render_mode, 
                 n_intruders = self.n_intruders,
                 image_mode = self.image_mode,
@@ -246,7 +246,9 @@ class RLTrainer:
         return sorted(l, key=alphanum_key)
     
 if __name__ == "__main__":
-    trainer = RLTrainer(model=RL_MODEL, 
+    trainer = RLTrainer(env = ENV,
+                        model = RL_MODEL, 
+                        buffer_size = DQN_BUFFER_SIZE,
                         image_mode=IMAGE_MODE, 
                         n_intruders = N_INTRUDERS, 
                         image_size = IMAGE_SIZE, 
@@ -255,7 +257,6 @@ if __name__ == "__main__":
                         train_episodes = TRAIN_EPISODES,
                         eval_episodes = EVAL_EPISODES, 
                         train = TRAIN, 
-                        test = TEST,
                         render_mode = RENDER_MODE)
     
     trainer.run()
