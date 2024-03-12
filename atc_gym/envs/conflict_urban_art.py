@@ -17,9 +17,16 @@ class ConflictUrbanArtEnv(gym.Env):
     metadata = {"render_modes": ["images"], 
                 "render_fps": 4, 
                 "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
-    def __init__(self, render_mode=None, n_intruders = 1, image_mode = 'rgb', image_pixel_size = 128):
+    def __init__(self, render_mode=None, n_intruders = None, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
-        self.n_intruders = n_intruders # number of intruders to spawn
+        if n_intruders is None:
+            # Intruders must be random between 1 and 6
+            self.intruders_random = True
+            self.n_intruders = self.np_random.integers(1, 7)
+        else:
+            self.intruders_random = False
+            self.n_intruders = n_intruders # number of intruders to spawn
+            
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = 60 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
@@ -122,6 +129,11 @@ class ConflictUrbanArtEnv(gym.Env):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
         self.step_no = 0
+        
+        # Randomise intruder number if necessary
+        if self.intruders_random:
+            self.n_intruders = self.np_random.integers(1, 7)
+            self.n_ac = self.n_intruders + 1
 
         # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
         # Ensure the initial locations are spaced enough apart
@@ -556,7 +568,7 @@ class ConflictUrbanArtEnv(gym.Env):
 # Testing
 if __name__ == "__main__":
     # Variables
-    n_intruders = 4
+    n_intruders = None
     image_mode = 'rel_rgb'
     image_pixel_size = 128
     
@@ -569,8 +581,8 @@ if __name__ == "__main__":
     # while not (done or truncated):
     #     obs, reward, done, truncated, info = env.step(0)
     
-    # Test env creation
-    #env.step(0)
+    #Test env creation
+    env.step(0)
     
     # Test step time
     # import timeit
