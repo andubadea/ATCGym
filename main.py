@@ -23,7 +23,7 @@ SEED = 42
 NUM_CPU = 16
 TRAIN_EPISODES = int(3e7)
 EVAL_EPISODES = 1
-RENDER_MODE = None # None means no images, images means images
+RENDER_MODE = 'images' # None means no images, images means images
 TRAIN = False
 
 class RLTrainer:
@@ -60,11 +60,6 @@ class RLTrainer:
             model.save(self.model_path + "model")
             
         elif self.render_mode is not None:
-            # Attempt to delete all existing images in the debug folder
-            to_delete = 'atc_gym/envs/debug/images/'
-            for filename in os.listdir(to_delete):
-                os.remove(to_delete + filename)
-            
             # Do the eval
             for i in range(self.eval_episodes):
                 done = truncated = False

@@ -1,4 +1,4 @@
-atc_gym/envs/debug/*
+atc_gym/envs/data/images/*
 models/*
 atc_gym/__pycache__/*
 atc_gym/envs/__pycache__/*

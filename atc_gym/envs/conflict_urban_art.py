@@ -1,9 +1,12 @@
 import numpy as np
+import geopandas as gpd
 import gymnasium as gym
 from gymnasium import spaces
-import pygame
 import os
-from shapely.geometry import Polygon, LineString
+import osmnx as ox
+import networkx as nx
+from shapely.geometry import LineString
+from shapely.ops import linemerge
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -14,9 +17,11 @@ matplotlib.use('Agg')
 class ConflictUrbanArtEnv(gym.Env):
     """This environment creates conflicts with drones that need resolving.
     """
+    
     metadata = {"render_modes": ["images"], 
                 "render_fps": 4, 
                 "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
+    
     def __init__(self, render_mode=None, n_intruders = None, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
         if n_intruders is None:
@@ -26,31 +31,15 @@ class ConflictUrbanArtEnv(gym.Env):
         else:
             self.intruders_random = False
             self.n_intruders = n_intruders # number of intruders to spawn
-            
-        self.playground_size = 100 # metres, also square
-        self.min_travel_dist = 60 #metres, minimum travel distance
+        self.playground_size = 500 # metres, also square
+        self.min_travel_dist = 200 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 2 # m/s, constant acceleration magnitude
-        self.max_speed = 15 #m/s, maximum speed
-        self.default_speed = 5 #m/s, starting speed for ownship
+        self.max_speed = 20 #m/s, maximum speed
+        self.default_speed = 10 #m/s, starting speed for ownship
         
-        # Center square properties
-        self.cntr_sq = 0.3 # Ratio of centre square size to env size
-        self.cntr_sq_size = self.cntr_sq * self.playground_size
-        self.cntr_low_coord = (1-self.cntr_sq)/2 * self.playground_size # Lower coord for both x and y
-        self.cntr_high_coord = ((1-self.cntr_sq)/2 + self.cntr_sq) * self.playground_size # Lower coord
-        self.cntr_poly = Polygon([[self.cntr_low_coord, self.cntr_low_coord], #bottom left
-                                  [self.cntr_high_coord, self.cntr_low_coord], #bottom right
-                                  [self.cntr_high_coord, self.cntr_high_coord], # top right
-                                  [self.cntr_low_coord, self.cntr_high_coord]]) #top left
-        
-        # Route properties
-        self.wp_res = 10 #metres, waypoint resolution
-        self.wp_res_var = 5 # Variance allowed in the resolution
-        self.hdg_range = 25 #deg, heading range where the next waypoint can be w.r.t. dest
-        self.clip_tol = 1 #metres, tolerance at which a waypoint just clips to another existing one
-        self.dest_tol = 15 #meteres, distance at which route clips to destination
-        self.turn_prob = 0.10 # chance that a wp is big turn
+        # Load the city graph
+        self.G, self.nodes_m, self.edges_m = self.load_graph('Vienna')
         
         # Image properties
         self.image_pixel_size = image_pixel_size # Resolution of image
@@ -60,7 +49,7 @@ class ConflictUrbanArtEnv(gym.Env):
         self.dt = 0.1 # seconds, simulation time step
         self.action_dt = 1 #seconds, action time step
         self.step_no = 0 #sim step counter
-        self.max_steps = 500 #maximum steps per episode
+        self.max_steps = 1000 #maximum steps per episode
         
         # Useful calculated properties
         self.n_ac = self.n_intruders + 1
@@ -81,9 +70,11 @@ class ConflictUrbanArtEnv(gym.Env):
         
         # Build observation space dict, define it as an rgb image
         if image_mode == 'rgb' or image_mode == 'rel_rgb':
-            self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
+            self.observation_space = spaces.Box(low = 0, high = 255, 
+                                                shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
         elif image_mode == 'rel_gry':
-            self.observation_space = spaces.Box(low = 0, high = 255, shape=(self.image_pixel_size,self.image_pixel_size,1), dtype=np.uint8)
+            self.observation_space = spaces.Box(low = 0, high = 255, 
+                                                shape=(self.image_pixel_size,self.image_pixel_size,1), dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -97,9 +88,21 @@ class ConflictUrbanArtEnv(gym.Env):
         
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        if render_mode == "images":
+            to_delete = f'{os.path.dirname(__file__)}/data/images/'
+            for filename in os.listdir(to_delete):
+                os.remove(to_delete + filename)
         
-        self.window = None
-        self.clock = None
+    def load_graph(self, city:str = 'Vienna'):
+        dirname = os.path.dirname(__file__)
+        nodes = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', layer='nodes')
+        edges = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', layer='edges')
+        nodes.set_index(['osmid'], inplace=True)
+        edges.set_index(['u', 'v', 'key'], inplace=True)
+        nodes_m = nodes.to_crs(epsg = '32633') # metres
+        edges_m = edges.to_crs(epsg = '32633') # metres
+        G = ox.graph_from_gdfs(nodes, edges)
+        return G, nodes_m, edges_m
         
     def _get_obs(self) -> np.ndarray:
         # Here we basically create the image
@@ -132,13 +135,14 @@ class ConflictUrbanArtEnv(gym.Env):
         
         # Randomise intruder number if necessary
         if self.intruders_random:
-            self.n_intruders = self.np_random.integers(1, 7)
+            self.n_intruders = self.np_random.integers(1, 5)
             self.n_ac = self.n_intruders + 1
 
         # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
         # Ensure the initial locations are spaced enough apart
-        self.ac_locations = self.generate_origins()
         self.ac_routes = self.generate_routes()
+        self.ac_locations = np.array([route[0] for route in self.ac_routes])
+        self.ac_targets = np.array([route[-1] for route in self.ac_routes])
         self.ac_wpidx = np.ones(self.n_ac, dtype=int) # waypoint index
         self.ac_current_wp = np.array([route[1] for route in self.ac_routes]) # target is first wp
         # Random intruder AC speeds between 50% and 90% of the maximum speed
@@ -183,31 +187,9 @@ class ConflictUrbanArtEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
         
-        # if self.debug:
-        #     print(f'\n----- Step {self.step_no} -----')
-        #     print(f'Distance to target: {own_dist2goal}')
-        #     print(f'Distance to others: {own_dist2others}')
-        #     print(f'Acceleration: {accel}')
-        #     print(f'Speed: {self.ac_speeds[0]}')
-        #     print(f'Intrusion: {intrusion}')
-        #     print(f'Reward: {reward}')
-        #     print(f'Terminated: {terminated}')
-        
         self.step_no += 1
         
         return observation, reward, terminated, False, info
-    
-    def scale_intruder_targets(self) -> None:
-        # Get target directions
-        dir_v = self.ac_targets - self.ac_locations
-        # Get unit vectors
-        unit_dir_v = np.transpose(dir_v.T / np.linalg.norm(dir_v, axis = 1))
-        # Extend the target by a lot
-        new_targets = self.ac_locations + unit_dir_v * self.playground_size * 10
-        # Set the intruder targets as this
-        self.ac_targets[1:] = new_targets[1:]
-        return
-        
     
     def update_pos(self) -> None:
         # Get distances to current waypoints
@@ -225,6 +207,8 @@ class ConflictUrbanArtEnv(gym.Env):
         unit_dir_v = np.transpose(dir_v.T / np.linalg.norm(dir_v, axis = 1))
         # Now update position
         self.ac_locations += np.transpose((self.ac_speeds * self.dt) * unit_dir_v.T)
+        # Check if intruders have reached their destination. If yes, remove them
+        # from the picture.
         return
         
     def dist2target(self, acidx:int) -> float:
@@ -326,17 +310,11 @@ class ConflictUrbanArtEnv(gym.Env):
             ax.plot(route_arr[:,0], route_arr[:,1],
                     color = int_color,
                     linewidth=2) # Trajectory
-            
+        
         # Plot ownship info in green
         # Encode its speed in the blue channel
         own_color = (0,1,0)
         own_spd_color = (0,1, self.ac_speeds[0]/self.max_speed)
-        ax.scatter(self.ac_locations[0][0],
-                    self.ac_locations[0][1], 
-                    marker='o', 
-                    color = own_spd_color,
-                    s = 600,
-                    linewidths=3) # Location
         # Get route
         route = self.ac_routes[0][self.ac_wpidx[0]:]
         # Insert current location
@@ -347,13 +325,20 @@ class ConflictUrbanArtEnv(gym.Env):
                  color = own_color,
                  linewidth=2) # Trajectory
         
-        # Plot the targets
+        # Plot the target
         ax.scatter(self.ac_targets[0][0],
                    self.ac_targets[0][1],
                    marker = 'x',
                    color = own_color,
                    s = 300,
                    linewidths=5)
+        
+        ax.scatter(self.ac_locations[0][0],
+                    self.ac_locations[0][1], 
+                    marker='o', 
+                    color = own_spd_color,
+                    s = 600,
+                    linewidths=3) # Location
 
         # Add ax to figure 
         fig.add_axes(ax)
@@ -382,176 +367,133 @@ class ConflictUrbanArtEnv(gym.Env):
         fig.clear()
         plt.close()
         if self.render_mode == "images":
+            dirname = os.path.dirname(__file__)
             fig_debug, ax = plt.subplots()
             ax.imshow(plot_array)
-            dirname = os.path.dirname(__file__)
-            fig_debug.savefig(f'{dirname}/debug/images/{self.step_no}.png')
+            fig_debug.savefig(f'{dirname}/data/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()
         return plot_array
         
     def close(self) -> None:
-        if self.window is not None:
-            pygame.display.quit()
-            pygame.quit()
+        pass
             
-    def generate_origins(self) -> np.ndarray:
-        """Generates aircraft origins with a minimum distance between them.
-        The origins are also outside of the centre.
-
-        Args:
-            n (_type_): number of aircraft
-            shape (_type_): dimensionality (2d,3d, etc)
-            min_dist (_type_): minimum distance (metres)
+    def get_subgraphs_nodes(self) -> List:
+        """Provides a random subgraph of the big graph in function of the city limits and playground size.
 
         Returns:
-            _type_: ndarray
+            Any: The subgraph
         """
-        # Initialise coords array
-        coords = np.zeros((self.n_ac, 2))
-        # First starting point is random, set all as this point
-        coords += self.np_random.random(2) * self.playground_size
-        # Keep setting points until we're outside centre
-        inside_centre = np.all((self.cntr_low_coord<coords[0]) & 
-                                   (coords[0]<self.cntr_high_coord))
-        while inside_centre:
-            coords = np.zeros((self.n_ac, 2))+ self.np_random.random(2) * self.playground_size
-            inside_centre = np.all((self.cntr_low_coord<coords[0]) & 
-                                   (coords[0]<self.cntr_high_coord))
-        # Now set subsequent points such that distance is met
-        for i in range(self.n_intruders):
-            acidx = i + 1
-            # Get distance to previous origins
-            dist = np.linalg.norm(coords[acidx] - coords[:acidx], axis=1)
-            # Also check if point is in the middle
-            inside_centre = np.all((self.cntr_low_coord<coords[acidx]) & 
-                                   (coords[acidx]<self.cntr_high_coord))
-            # Keep going till it clicks
-            while np.any(dist < self.rpz*3) or inside_centre:
-                # Set random coords
-                coords[acidx] = self.np_random.random(2) * self.playground_size
-                dist = np.linalg.norm(coords[acidx] - coords[:acidx], axis=1)
-                inside_centre = np.all((self.cntr_low_coord<coords[acidx]) & 
-                                       (coords[acidx]<self.cntr_high_coord))
-        return coords
-    
+        attempts = 20
+        for a in range(attempts):
+            # First, pick a random node in the big graph
+            centre_node = self.nodes_m.sample()['geometry'].values[0]
+            # Create a small and large square around this point
+            small_square = centre_node.buffer(self.playground_size/2, cap_style = 'square')
+            big_square = centre_node.buffer(self.playground_size/1.5, cap_style = 'square')
+            # Get the nodes that intersect these polygons
+            small_int_nodes = self.nodes_m[self.nodes_m.within(small_square)]
+            if len(small_int_nodes) > 9: # At least 10 nodes in small graph
+                # Also get the other subgraph
+                big_int_nodes = self.nodes_m[self.nodes_m.within(big_square)]
+                return small_int_nodes.index.values.tolist(), \
+                        big_int_nodes.index.values.tolist(), np.array([centre_node.x, centre_node.y])
+        # return the graph anyway
+        print('Not enough nodes, graph is smaller than needed.')
+        return small_int_nodes.index.values.tolist(), \
+                        big_int_nodes.index.values.tolist(), np.array([centre_node.x, centre_node.y])
+        
     def generate_routes(self) -> List:
-        """Generates aircraft routes that mimmic streets.
+        """Generates aircraft routes based on a section of a graph.
 
         Returns:
-            np.ndarray: _description_
+            List: List of routes.
         """
-        # We have origins we must now generate an intersection point.
-        # It needs to be somewhere in the centre of the playground, so let's place it in 
-        # a square surrounding the centre with its side = 1/4 playgound size
-        intersection = self.np_random.random(2) * self.cntr_sq_size + self.cntr_low_coord
-        # Next, we want to generate the targets such that a line connecting it and the origin
-        # passes through the centre square
-        self.ac_targets = self.np_random.random((self.n_ac, 2)) * self.playground_size # Initialise targets
-        # We will sample the target locations randomly until it is far enough from origin
-        # It also needs to be outside the centre square
-        # The line connecting origin and destination must also intersect the centre square
-        for acidx in range(self.n_ac):
-            dist_ok = self.dist2target(acidx) > self.min_travel_dist # distance from origin
-            # Make sure it is directed towards the centre
-            sq_intersects = self.cntr_poly.intersects(LineString([self.ac_locations[acidx],
-                                                                  self.ac_targets[acidx]]))
-            # Make sure it's outside centre
-            inside_centre = np.all((self.cntr_low_coord<self.ac_targets[acidx]) & 
-                                   (self.ac_targets[acidx]<self.cntr_high_coord))
+        attempts = 20
+        for attempt in range(attempts):
+            ac_routes = []
+            # We want to create two subgraphs. A smaller one for the ownship, and a larger one
+            # for intruders.
+            own_graph_nodes, intr_graph_nodes, centre_node = self.get_subgraphs_nodes()
             
-            while not (dist_ok and sq_intersects and not inside_centre):
-                # Try again
-                self.ac_targets[acidx] = self.np_random.random(2) * self.playground_size
-                # Do the checks
-                dist_ok = self.dist2target(acidx) > self.min_travel_dist
-                sq_intersects = self.cntr_poly.intersects(LineString([self.ac_locations[acidx],
-                                                                  self.ac_targets[acidx]]))
-                inside_centre = np.all((self.cntr_low_coord<self.ac_targets[acidx]) & 
-                                       (self.ac_targets[acidx]<self.cntr_high_coord))
-        
-        # For intruders, we want the targets to be very far away so they leave the screen eventually
-        self.scale_intruder_targets()
-        
-        # Initialise waypoint database
-        waypoint_database = []
-        # Also initialise aircraft waypoint list
-        ac_routes = []
-        
-        # Now, for each aircraft, we want to generate waypoints that kind of look like a street
-        for acidx in range(self.n_ac):
-            at_dest = False
-            waypoints = [list(self.ac_locations[acidx])] # First waypoint is the origin
-            while not at_dest:
-                # Get a new pseudo-random waypoint
-                new_wp = self.create_new_wp(waypoints[-1], self.ac_targets[acidx], acidx)
-                # Check the distances to all the other waypoints in the database
-                if acidx > 0: # Database empty for ownship so skip
-                    dist_to_wp = self.dist2points(new_wp, waypoint_database)
-                    # Any waypoint closer than the tolerance? New waypoint becomes
-                    # the one with the lowest distance
-                    min_idx = np.argmin(dist_to_wp)
-                    if dist_to_wp[min_idx] < self.clip_tol:
-                        new_wp = np.array(waypoint_database[min_idx])
-                
-                # If the new wp is within the center box, make the new wp as the intersection
-                if (list(intersection) not in waypoints) and \
-                            np.all((self.cntr_low_coord<new_wp) & 
-                                    (new_wp<self.cntr_high_coord)):
-                    new_wp = intersection
-                        
-                # Also clip if we are within range of the target or we have too many waypoints
-                if np.linalg.norm(self.ac_targets[acidx] - new_wp) < self.dest_tol or \
-                    len(waypoints) > 20:
-                    new_wp = self.ac_targets[acidx]
-                    at_dest = True
-                
-                # Append new wp to waypoints
-                waypoints.append(list(new_wp))
-            
-            # Append the route to the list of routes
-            ac_routes.append(waypoints)
-            # Now take out intersection from the route if it is in it
-            if (list(intersection) in waypoints):
-                waypoints.pop(waypoints.index(list(intersection)))
-            # Add the waypoints of this route to the database
-            waypoint_database += waypoints
-
-        # return the routes
-        return ac_routes
-                
-    def create_new_wp(self, current_wp, target, acidx) -> np.ndarray:
-        while True:
-            # Get target direction
-            dir_v = target - current_wp
-            # Get unit vector
-            unit_dir_v = np.transpose(dir_v / np.linalg.norm(dir_v))
-            # Select a random angle within range to rotate it by
-            # Random chance that the angle is between hdg range and 90
-            big_turn = self.np_random.random() < self.turn_prob
-            if big_turn:
-                rot_angle = self.np_random.integers(45, 90) * self.np_random.choice([-1,1])
-            else:
-                rot_angle = self.np_random.integers(-self.hdg_range, self.hdg_range)
-            # Rotate this vector
-            new_dir_v = self.rotate_vector(unit_dir_v, rot_angle)
-            # Get a random distance to extend it by
-            if big_turn:
-                # Give this a bigger distance
-                distance = self.np_random.integers(-self.wp_res_var,self.wp_res_var) + self.wp_res * 2
-            else:
-                distance = self.np_random.integers(-self.wp_res_var,self.wp_res_var) + self.wp_res
-            # Now extend it
-            new_wp = current_wp + new_dir_v * distance
-            # Check if it is within playground bounds, but only for the ownship
-            if np.all((0 < new_wp) & (new_wp < self.playground_size)):
-                return new_wp
-            elif acidx > 0:
-                # Outside playground but this is an intruder, so just set the next wp as the target
-                return np.array(target)
-            else:
-                # Try again
+            if own_graph_nodes is None:
+                # Bad graph
                 continue
+            
+            # We want to use the centre node to shift the coordinates to smaller
+            # coords within playground bounds.
+            min_x, min_y = centre_node - self.playground_size/2
+            # Make graphs out of the nodes
+            G_own = self.G.subgraph(own_graph_nodes)
+            G_intr = self.G.subgraph(intr_graph_nodes)
+            
+            # Create the ownship route
+            own_route, own_orig, own_dest = self.generate_route_in_graph(G_own, 
+                                                        own_graph_nodes, own_graph_nodes,
+                                                        min_x, min_y)
+            
+            if own_route is None:
+                # Bad subgraphs, get others
+                continue
+            
+            ac_routes.append(own_route.copy())
+            
+            # Remove the ownship origin node from the list of nodes that can be used as origins
+            intr_graph_nodes.pop(intr_graph_nodes.index(own_orig))
+            
+            # Create the intruder routes
+            for i in range(self.n_intruders):
+                # Create the route
+                intr_route, intr_orig, intr_dest = self.generate_route_in_graph(G_intr, 
+                                                    intr_graph_nodes, intr_graph_nodes,
+                                                        min_x, min_y)
+                
+                if own_graph_nodes is None:
+                    # Too many intruders maybe? Skip this one then
+                    continue
+                
+                ac_routes.append(intr_route.copy())
+                
+                # Remove this origin
+                intr_graph_nodes.pop(intr_graph_nodes.index(intr_orig))
+            
+            # return the routes
+            return ac_routes
+        
+        # if we are here, we have failed to generate routes. Do a reset then
+        self.reset()
+    
+    def generate_route_in_graph(self, G, orig_nodes:List, dest_nodes:List,
+                                min_x:float, min_y:float) -> Any:
+        """Generates a route in a graph with the origin node and destination
+        nodes chosen randomly from orig_nodes and dest_nodes until the global
+        minimum travel dist requirement is satisfied.
+        Route is also shifted to fit the playground coords using min_x, min_y.
+        """
+        # Try to find an origin/destination pair for the ownship
+        attempts = 20
+        for attempt in range(attempts):
+            # Get a random origin and destination node
+            org_node = self.np_random.choice(orig_nodes)
+            dest_node = self.np_random.choice(dest_nodes)
+            # See if there is a path between these two nodes and if the length is good
+            try:
+                dist = nx.shortest_path_length(G, org_node, dest_node, weight = 'length')
+            except:
+                # No path between them, try with other nodes
+                continue
+            
+            if dist > self.min_travel_dist:
+                # Get the actual route now
+                route = nx.shortest_path(G, org_node, dest_node)
+                # Make the geometry
+                route_geom = linemerge([self.edges_m.loc[(u, v, 0), 'geometry'] for u, v in zip(route[:-1], route[1:])])
+                # Return a nice list of waypoints
+                route_wp = list(zip(route_geom.xy[0]-min_x, route_geom.xy[1]-min_y))
+                return route_wp, org_node, dest_node
+            
+        # No route found, graph is bad
+        return None, None, None
     
     # Some helper functions
     @staticmethod
@@ -569,7 +511,7 @@ class ConflictUrbanArtEnv(gym.Env):
 if __name__ == "__main__":
     # Variables
     n_intruders = None
-    image_mode = 'rel_rgb'
+    image_mode = 'rgb'
     image_pixel_size = 128
     
     # Make environment
@@ -577,12 +519,12 @@ if __name__ == "__main__":
     env.reset()
     
     #Test images
-    # done = truncated = False
-    # while not (done or truncated):
-    #     obs, reward, done, truncated, info = env.step(0)
+    done = truncated = False
+    while not (done or truncated):
+        obs, reward, done, truncated, info = env.step(0)
     
     #Test env creation
-    env.step(0)
+    #env.step(0)
     
     # Test step time
     # import timeit
