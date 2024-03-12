@@ -23,7 +23,7 @@ SEED = 42
 NUM_CPU = 16
 TRAIN_EPISODES = int(3e7)
 EVAL_EPISODES = 1
-RENDER_MODE = "images" # None means no images, images means images
+RENDER_MODE = None # None means no images, images means images
 TRAIN = False
 
 class RLTrainer:
