@@ -3,3 +3,4 @@ models/*
 atc_gym/__pycache__/*
 atc_gym/envs/__pycache__/*
 output/*
+test.py
