@@ -160,7 +160,7 @@ class RLTrainer:
     
     def make_gif(self) -> None:
         # Get a list of all the images in the debug folder
-        png_folder = 'atc_gym/envs/debug/images/'
+        png_folder = 'atc_gym/envs/data/images/'
         png_list = self.natural_sort([img for img in os.listdir(png_folder) if '.png' in img])
         # Create a gif
         images = []

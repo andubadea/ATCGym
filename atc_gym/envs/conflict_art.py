@@ -18,7 +18,14 @@ class ConflictArtEnv(gym.Env):
                 "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
     def __init__(self, render_mode=None, n_intruders = 1, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
-        self.n_intruders = n_intruders # number of intruders to spawn
+        self.intr_max = 6
+        if n_intruders is None:
+            # Intruders must be random between 1 and 9
+            self.intruders_random = True
+            self.n_intruders = self.np_random.integers(1, self.intr_max+1)
+        else:
+            self.intruders_random = False
+            self.n_intruders = n_intruders # number of intruders to spawn
         self.playground_size = 100 # metres, also square
         self.min_travel_dist = self.playground_size/2 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
@@ -95,6 +102,11 @@ class ConflictArtEnv(gym.Env):
         super().reset(seed=seed)
         self.step_no = 0
         
+        # Randomise intruder number if necessary
+        if self.intruders_random:
+            self.n_intruders = self.np_random.integers(1, self.intr_max)
+            self.n_ac = self.n_intruders + 1
+            
         # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
         # Ensure the initial locations are spaced enough apart
         self.ac_locations = self.generate_origins()
@@ -150,16 +162,6 @@ class ConflictArtEnv(gym.Env):
         # Get needed info
         observation = self._get_obs()
         info = self._get_info()
-        
-        # if self.debug:
-        #     print(f'\n----- Step {self.step_no} -----')
-        #     print(f'Distance to target: {own_dist2goal}')
-        #     print(f'Distance to others: {own_dist2others}')
-        #     print(f'Acceleration: {accel}')
-        #     print(f'Speed: {self.ac_speeds[0]}')
-        #     print(f'Intrusion: {intrusion}')
-        #     print(f'Reward: {reward}')
-        #     print(f'Terminated: {terminated}')
         
         self.step_no += 1
         
@@ -362,41 +364,3 @@ class ConflictArtEnv(gym.Env):
                 coords[acidx] = self.np_random.random(2) * self.playground_size
                 dist = np.linalg.norm(coords[acidx] - coords[:acidx], axis=1)
         return coords
-
-# Testing
-if __name__ == "__main__":
-    # Variables
-    n_intruders = 4
-    image_mode = 'rgb'
-    image_pixel_size = 128
-    
-    # Make environment
-    env = ConflictArtEnv(None, n_intruders, image_mode, image_pixel_size)
-    env.reset()
-    
-    # Test images
-    for a in range(200):
-        env.step(0)
-    
-    # Test step time
-    # import timeit
-    # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
-    
-    # Test average dumb reward
-    # rolling_avg = []
-    # rew_list = []
-    # for a in range(10000):
-    #     env.reset()
-    #     rew_sum = 0
-    #     for b in range(300):
-    #         _, reward, terminated, _, _ = env.step(0)
-    #         rew_sum += reward
-    #         if terminated:
-    #             break
-    #     rew_list.append(rew_sum)
-    #     rolling_avg.append(np.average(rew_list))
-    #     while len(rolling_avg) > 1000:
-    #         rolling_avg.pop(0)
-    # plt.figure()
-    # plt.plot(range(len(rolling_avg)),rolling_avg)
-    # plt.savefig('hi.png')
