@@ -5,7 +5,6 @@ from gymnasium import spaces
 import os
 import osmnx as ox
 import networkx as nx
-from shapely.geometry import LineString
 from shapely.ops import linemerge
 import matplotlib
 import matplotlib.pyplot as plt
@@ -24,17 +23,18 @@ class ConflictUrbanArtEnv(gym.Env):
     
     def __init__(self, render_mode=None, n_intruders = None, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
+        self.intr_max = 6
         if n_intruders is None:
-            # Intruders must be random between 1 and 6
+            # Intruders must be random between 1 and 9
             self.intruders_random = True
-            self.n_intruders = self.np_random.integers(1, 7)
+            self.n_intruders = self.np_random.integers(1, self.intr_max+1)
         else:
             self.intruders_random = False
             self.n_intruders = n_intruders # number of intruders to spawn
-        self.playground_size = 500 # metres, also square
-        self.min_travel_dist = 200 #metres, minimum travel distance
+        self.playground_size = 200 # metres, also square
+        self.min_travel_dist = 100 #metres, minimum travel distance
         self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
-        self.mag_accel = 2 # m/s, constant acceleration magnitude
+        self.mag_accel = 3.5 # m/s, constant acceleration magnitude
         self.max_speed = 20 #m/s, maximum speed
         self.default_speed = 10 #m/s, starting speed for ownship
         
@@ -135,28 +135,33 @@ class ConflictUrbanArtEnv(gym.Env):
         
         # Randomise intruder number if necessary
         if self.intruders_random:
-            self.n_intruders = self.np_random.integers(1, 5)
+            self.n_intruders = self.np_random.integers(1, self.intr_max)
             self.n_ac = self.n_intruders + 1
 
         # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
         # Ensure the initial locations are spaced enough apart
-        self.ac_routes = self.generate_routes()
-        self.ac_locations = np.array([route[0] for route in self.ac_routes])
-        self.ac_targets = np.array([route[-1] for route in self.ac_routes])
-        self.ac_wpidx = np.ones(self.n_ac, dtype=int) # waypoint index
-        self.ac_current_wp = np.array([route[1] for route in self.ac_routes]) # target is first wp
-        # Random intruder AC speeds between 50% and 90% of the maximum speed
-        self.ac_speeds = self.np_random.uniform(0.5, 0.9, self.n_ac) * self.max_speed
-        # Set the initial speed of the ownship as the default speed
-        self.ac_speeds[0] = self.default_speed
+        attempts = 10
+        for attempt in range(attempts):
+            self.ac_routes = self.generate_routes()
+            if self.ac_routes is None:
+                continue # Try again
+            self.ac_locations = np.array([route[0] for route in self.ac_routes])
+            self.ac_targets = np.array([route[-1] for route in self.ac_routes])
+            self.ac_wpidx = np.ones(self.n_ac, dtype=int) # waypoint index
+            self.ac_current_wp = np.array([route[1] for route in self.ac_routes]) # target is first wp
+            # Random intruder AC speeds between 50% and 90% of the maximum speed
+            self.ac_speeds = self.np_random.uniform(0.5, 0.9, self.n_ac) * self.max_speed
+            # Set the initial speed of the ownship as the default speed
+            self.ac_speeds[0] = self.default_speed
+            # Number of intrusion time steps
+            self.intrusion_time_steps = 0
+
+            observation = self._get_obs()
+            info = self._get_info()
+
+            return observation, info
         
-        # Number of intrusion time steps
-        self.intrusion_time_steps = 0
-
-        observation = self._get_obs()
-        info = self._get_info()
-
-        return observation, info
+        raise EnvException('Environment could not be created. Please tweak its parameters.')
     
     def step(self, action) -> Any:
         # Map the action (element of {0,1,2,3}) to ownship acceleration
@@ -192,6 +197,17 @@ class ConflictUrbanArtEnv(gym.Env):
         return observation, reward, terminated, False, info
     
     def update_pos(self) -> None:
+        # We remove intruders from the simulation area if they have reached their target
+        intruders_reached = self.dist2targets() < self.target_tolerance
+        # Always ignore the ownship in this part
+        intruders_reached[0] = False
+        for acidx in np.argwhere(intruders_reached).flatten():
+            # Just place intruders that finished their flight very far away
+            self.ac_locations[acidx] = [-100000,-100000]
+            # And also set far away targets for em
+            self.ac_targets[acidx] = [-110000,-110000]
+            self.ac_current_wp[acidx] = [-110000,-110000]
+            self.ac_routes[acidx][-1] = [-110000,-110000]
         # Get distances to current waypoints
         dist_wps = self.dist2curwps()
         # Aircraft that reached their wp switch to the next one
@@ -384,8 +400,8 @@ class ConflictUrbanArtEnv(gym.Env):
         Returns:
             Any: The subgraph
         """
-        attempts = 20
-        for a in range(attempts):
+        attempts = 5
+        for attempt in range(attempts):
             # First, pick a random node in the big graph
             centre_node = self.nodes_m.sample()['geometry'].values[0]
             # Create a small and large square around this point
@@ -393,15 +409,12 @@ class ConflictUrbanArtEnv(gym.Env):
             big_square = centre_node.buffer(self.playground_size/1.5, cap_style = 'square')
             # Get the nodes that intersect these polygons
             small_int_nodes = self.nodes_m[self.nodes_m.within(small_square)]
-            if len(small_int_nodes) > 9: # At least 10 nodes in small graph
-                # Also get the other subgraph
-                big_int_nodes = self.nodes_m[self.nodes_m.within(big_square)]
+            big_int_nodes = self.nodes_m[self.nodes_m.within(big_square)]
+            if len(big_int_nodes) > self.n_ac: # We need to spawn everyone
                 return small_int_nodes.index.values.tolist(), \
                         big_int_nodes.index.values.tolist(), np.array([centre_node.x, centre_node.y])
         # return the graph anyway
-        print('Not enough nodes, graph is smaller than needed.')
-        return small_int_nodes.index.values.tolist(), \
-                        big_int_nodes.index.values.tolist(), np.array([centre_node.x, centre_node.y])
+        return None, None, None
         
     def generate_routes(self) -> List:
         """Generates aircraft routes based on a section of a graph.
@@ -409,7 +422,7 @@ class ConflictUrbanArtEnv(gym.Env):
         Returns:
             List: List of routes.
         """
-        attempts = 20
+        attempts = 10
         for attempt in range(attempts):
             ac_routes = []
             # We want to create two subgraphs. A smaller one for the ownship, and a larger one
@@ -443,25 +456,41 @@ class ConflictUrbanArtEnv(gym.Env):
             
             # Create the intruder routes
             for i in range(self.n_intruders):
-                # Create the route
-                intr_route, intr_orig, intr_dest = self.generate_route_in_graph(G_intr, 
-                                                    intr_graph_nodes, intr_graph_nodes,
-                                                        min_x, min_y)
-                
-                if own_graph_nodes is None:
-                    # Too many intruders maybe? Skip this one then
-                    continue
-                
-                ac_routes.append(intr_route.copy())
-                
-                # Remove this origin
-                intr_graph_nodes.pop(intr_graph_nodes.index(intr_orig))
+                attempts = 5
+                for attempt in range(attempts):
+                    # Create the route
+                    intr_route, intr_orig, intr_dest = self.generate_route_in_graph(G_intr, 
+                                                        intr_graph_nodes, intr_graph_nodes,
+                                                            min_x, min_y)
+                    
+                    if intr_route is None:
+                        # Too many intruders maybe? try again
+                        continue
+                    
+                    # Check if node is too close to ownship start point
+                    dist = np.linalg.norm(np.array(ac_routes[0][0]) - np.array(intr_route[0]))
+                    
+                    if dist < self.rpz * 2:
+                        # Too close to ownship, try again
+                        continue
+                    
+                    ac_routes.append(intr_route.copy())
+                    # Remove this origin
+                    intr_graph_nodes.pop(intr_graph_nodes.index(intr_orig))
+                    break
             
+            if len(ac_routes) == 1:
+                # We only have an ownship, try again
+                continue
+            
+            # Update the number of intruders if they all failed to be created
+            self.n_intruders = len(ac_routes) - 1
+            self.n_ac = len(ac_routes)
             # return the routes
             return ac_routes
         
-        # if we are here, we have failed to generate routes. Do a reset then
-        self.reset()
+        # We failed to generate routes, reset
+        return None
     
     def generate_route_in_graph(self, G, orig_nodes:List, dest_nodes:List,
                                 min_x:float, min_y:float) -> Any:
@@ -471,7 +500,7 @@ class ConflictUrbanArtEnv(gym.Env):
         Route is also shifted to fit the playground coords using min_x, min_y.
         """
         # Try to find an origin/destination pair for the ownship
-        attempts = 20
+        attempts = 10
         for attempt in range(attempts):
             # Get a random origin and destination node
             org_node = self.np_random.choice(orig_nodes)
@@ -506,47 +535,7 @@ class ConflictUrbanArtEnv(gym.Env):
         c, s = np.cos(angle), np.sin(angle)
         R = np.array(((c,-s), (s, c)))
         return np.dot(R, vec)
-        
-# Testing
-if __name__ == "__main__":
-    # Variables
-    n_intruders = None
-    image_mode = 'rgb'
-    image_pixel_size = 128
     
-    # Make environment
-    env = ConflictUrbanArtEnv('images', n_intruders, image_mode, image_pixel_size)
-    env.reset()
-    
-    #Test images
-    done = truncated = False
-    while not (done or truncated):
-        obs, reward, done, truncated, info = env.step(0)
-    
-    #Test env creation
-    #env.step(0)
-    
-    # Test step time
-    # import timeit
-    # print(timeit.timeit('env.step(0)', number = 500, globals = globals())/500)
-    
-    # Test average dumb reward
-    # rolling_avg = []
-    # rew_list = []
-    # tests_num = 100
-    # for a in range(tests_num):
-    #     print(f'Episode: {a+1}/{tests_num} | rolling avg: {np.average(rolling_avg)}')
-    #     env.reset()
-    #     rew_sum = 0
-    #     done = truncated = False
-    #     while not (done or truncated):
-    #         obs, reward, done, truncated, info = env.step(0)
-    #         rew_sum += reward
-            
-    #     rew_list.append(rew_sum)
-    #     rolling_avg.append(np.average(rew_list))
-    #     while len(rolling_avg) > 100:
-    #         rolling_avg.pop(0)
-    # plt.figure()
-    # plt.plot(range(len(rolling_avg)),rolling_avg)
-    # plt.savefig('hi.png')
+class EnvException(Exception):
+    def __init__(self, msg):
+        self.msg = msg
