@@ -32,7 +32,7 @@ class ConflictUrbanArtEnv(gym.Env):
             self.n_intruders = n_intruders # number of intruders to spawn
         self.playground_size = 200 # metres, also square
         self.min_travel_dist = 100 #metres, minimum travel distance
-        self.rpz = 32 #metres, protection zone radius (minimum distance between two agents)
+        self.rpz = 16 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 3.5 # m/s, constant acceleration magnitude
         self.max_speed = 20 #m/s, maximum speed
         self.default_speed = 10 #m/s, starting speed for ownship
@@ -178,7 +178,7 @@ class ConflictUrbanArtEnv(gym.Env):
         # Agent is successful if the target is reached
         success = own_dist2goal < self.target_tolerance
         # An intrusion occurs when any distance to others is smaller than the protection zone
-        intrusion = np.any(own_dist2others < self.rpz)
+        intrusion = np.any(own_dist2others < self.rpz*2)
         self.intrusion_time_steps += 1 if intrusion else 0
         # We terminate the episode if the ownship is successful or too many time steps have passed
         terminated = success or self.step_no > self.max_steps
