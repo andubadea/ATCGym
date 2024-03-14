@@ -185,8 +185,10 @@ class ConflictUrbanArtEnv(gym.Env):
         terminated = success or self.step_no > self.max_steps
         
         # We reward success and penalise intrusions
-        reward = 1 if success else 0 # reward for finishing
-        reward = reward if not intrusion else reward - 0.1 # intrusions are penalised
+        finish_reward = 1 if success else 0 # reward for finishing
+        intrusion_reward = -0.1 # Penalise intrusions
+        time_reward = -0.0001 # Penalise going very slow or standing still
+        reward = (finish_reward if not intrusion else finish_reward + intrusion_reward) + time_reward
         
         # Get needed info
         observation = self._get_obs()
@@ -328,9 +330,9 @@ class ConflictUrbanArtEnv(gym.Env):
                     linewidth=2) # Trajectory
         
         # Plot ownship info in green
-        # Encode its speed in the blue channel
         own_color = (0,1,0)
-        own_spd_color = (0,1, self.ac_speeds[0]/self.max_speed)
+        # Encode its speed in the blue channel
+        own_spd_color = (0,1, self.ac_speeds[0]/self.max_speed) 
         # Get route
         route = self.ac_routes[0][self.ac_wpidx[0]:]
         # Insert current location
@@ -371,6 +373,7 @@ class ConflictUrbanArtEnv(gym.Env):
         rgb_array[self.image_pixel_size-1,:] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, 0] = np.zeros((self.image_pixel_size, 4)) + 255
         rgb_array[:, self.image_pixel_size-1] = np.zeros((self.image_pixel_size, 4)) + 255
+        nice_rgb = rgb_array.copy()
         # Invert all the colors, 255 becomes 0
         rgb_array = np.abs(rgb_array-255)
         if 'gry' in self.image_mode:
@@ -385,7 +388,7 @@ class ConflictUrbanArtEnv(gym.Env):
         if self.render_mode == "images":
             dirname = os.path.dirname(__file__)
             fig_debug, ax = plt.subplots()
-            ax.imshow(plot_array)
+            ax.imshow(nice_rgb)
             fig_debug.savefig(f'{dirname}/data/images/{self.step_no}.png')
             fig_debug.clear()
             plt.close()

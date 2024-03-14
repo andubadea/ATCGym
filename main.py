@@ -21,10 +21,10 @@ N_INTRUDERS = None # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
 NUM_CPU = 16
-TRAIN_EPISODES = int(1e7)
-EVAL_EPISODES = 1
-RENDER_MODE = None # None means no images, images means images
-TRAIN = True
+TRAIN_EPISODES = int(3e7)
+EVAL_EPISODES = 10
+RENDER_MODE = 'images' # None means no images, images means images
+TRAIN = False
 
 class RLTrainer:
     def __init__(self, env:str, model:str = 'DQN', buffer_size:int = 500_000, image_mode:str = 'rgb', 
@@ -59,21 +59,27 @@ class RLTrainer:
             # Save final model
             model.save(self.model_path + "model")
             
-        elif self.render_mode is not None:
+        else:
+            # Delete old gif files
+            for filename in [x for x in os.listdir('output') if '.gif' in x]:
+                os.remove('output/' + filename)
             # Do the eval
             for i in range(self.eval_episodes):
                 done = truncated = False
                 obs, info = env.reset()
+                rew_sum = 0
                 while not (done or truncated):
                     # Predict
                     action, _states = model.predict(obs, deterministic=True)
                     # Get reward
                     obs, reward, done, truncated, info = env.step(action[()])
+                    rew_sum += reward
+                    
+                print(f'Episode: {i+1}/{self.eval_episodes} | total reward: {rew_sum}')
             
-            # Make a gif
-            self.make_gif()
-        else:
-            pass
+                # Make a gif
+                if self.render_mode is not None:
+                    self.make_gif(i)
         
         # Wrap up
         env.close()
@@ -158,7 +164,7 @@ class RLTrainer:
         self.env_no +=1 
         return env
     
-    def make_gif(self) -> None:
+    def make_gif(self, num) -> None:
         # Get a list of all the images in the debug folder
         png_folder = 'atc_gym/envs/data/images/'
         png_list = self.natural_sort([img for img in os.listdir(png_folder) if '.png' in img])
@@ -166,7 +172,7 @@ class RLTrainer:
         images = []
         for img in png_list:
             images.append(imageio.imread(png_folder + img))
-        imageio.mimsave('output/render.gif', images)
+        imageio.mimsave(f'output/Eval_{num+1}.gif', images)
         
         # Clean up
         for filename in os.listdir(png_folder):
