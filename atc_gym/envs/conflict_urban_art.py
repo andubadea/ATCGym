@@ -23,9 +23,8 @@ class ConflictUrbanArtEnv(gym.Env):
     
     def __init__(self, render_mode=None, n_intruders = None, image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
-        self.intr_max = 6
+        self.intr_max = 5
         if n_intruders is None:
-            # Intruders must be random between 1 and 9
             self.intruders_random = True
             self.n_intruders = self.np_random.integers(1, self.intr_max+1)
         else:
@@ -33,7 +32,7 @@ class ConflictUrbanArtEnv(gym.Env):
             self.n_intruders = n_intruders # number of intruders to spawn
         self.playground_size = 200 # metres, also square
         self.min_travel_dist = 100 #metres, minimum travel distance
-        self.rpz = 10 #metres, protection zone radius (minimum distance between two agents)
+        self.rpz = 32 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 3.5 # m/s, constant acceleration magnitude
         self.max_speed = 20 #m/s, maximum speed
         self.default_speed = 10 #m/s, starting speed for ownship
