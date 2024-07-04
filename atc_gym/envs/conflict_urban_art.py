@@ -21,7 +21,8 @@ class ConflictUrbanArtEnv(gym.Env):
                 "render_fps": 4, 
                 "image_mode": ["rgb", "rel_rgb", "rel_gry"]}
     
-    def __init__(self, render_mode=None, n_intruders = None, image_mode = 'rgb', image_pixel_size = 128):
+    def __init__(self, render_mode=None, n_intruders = None, 
+                                image_mode = 'rgb', image_pixel_size = 128):
         # Will want to eventually make these env properties
         self.intr_max = 5
         if n_intruders is None:
@@ -34,7 +35,7 @@ class ConflictUrbanArtEnv(gym.Env):
         self.min_travel_dist = 100 #metres, minimum travel distance
         self.rpz = 16 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 3.5 # m/s, constant acceleration magnitude
-        self.max_speed = 20 #m/s, maximum speed
+        self.max_speed = 18 #m/s, maximum speed
         self.default_speed = 10 #m/s, starting speed for ownship
         
         # Load the city graph
@@ -52,7 +53,8 @@ class ConflictUrbanArtEnv(gym.Env):
         
         # Useful calculated properties
         self.n_ac = self.n_intruders + 1
-        self.target_tolerance = self.max_speed * self.dt * 1.1 # to make sure that this condition is met
+        # to make sure that this condition is met
+        self.target_tolerance = self.max_speed * self.dt * 1.1
         
         # Initialisations, should be defined in reset
         self.ac_targets = None
@@ -70,10 +72,14 @@ class ConflictUrbanArtEnv(gym.Env):
         # Build observation space dict, define it as an rgb image
         if image_mode == 'rgb' or image_mode == 'rel_rgb':
             self.observation_space = spaces.Box(low = 0, high = 255, 
-                                                shape=(self.image_pixel_size,self.image_pixel_size,3), dtype=np.uint8)
+                                        shape=(self.image_pixel_size,
+                                               self.image_pixel_size,3), 
+                                        dtype=np.uint8)
         elif image_mode == 'rel_gry':
             self.observation_space = spaces.Box(low = 0, high = 255, 
-                                                shape=(self.image_pixel_size,self.image_pixel_size,1), dtype=np.uint8)
+                                        shape=(self.image_pixel_size,
+                                               self.image_pixel_size,1), 
+                                        dtype=np.uint8)
         
         # 3 actions: Nothing, Accelerate, Decelerate
         self.action_space = spaces.Discrete(3)
@@ -94,8 +100,10 @@ class ConflictUrbanArtEnv(gym.Env):
         
     def load_graph(self, city:str = 'Vienna'):
         dirname = os.path.dirname(__file__)
-        nodes = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', layer='nodes')
-        edges = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', layer='edges')
+        nodes = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', 
+                              layer='nodes')
+        edges = gpd.read_file(f'{dirname}/data/cities/{city}/streets.gpkg', 
+                              layer='edges')
         nodes.set_index(['osmid'], inplace=True)
         edges.set_index(['u', 'v', 'key'], inplace=True)
         nodes_m = nodes.to_crs(epsg = '32633') # metres
@@ -108,8 +116,9 @@ class ConflictUrbanArtEnv(gym.Env):
         return self.conflict_plot()
     
     def _get_info(self) -> dict:
-        # Here you implement any additional info that you want to return after a step,
-        # but that should not be used by the agent for decision making, so used for logging and debugging purposes
+        # Here you implement any additional info that you want to return 
+        # fter a step, but that should not be used by the agent for decision 
+        # making, so used for logging and debugging purposes
         # Initialise info dict
         info_dict = {}
         # Ownship stuff
@@ -137,7 +146,8 @@ class ConflictUrbanArtEnv(gym.Env):
             self.n_intruders = self.np_random.integers(1, self.intr_max)
             self.n_ac = self.n_intruders + 1
 
-        # Initialise all aircraft. Ownship will always be the one with index 0, the rest are intruders
+        # Initialise all aircraft. Ownship will always be the one with index 0, 
+        # the rest are intruders
         # Ensure the initial locations are spaced enough apart
         attempts = 10
         for attempt in range(attempts):
@@ -181,13 +191,15 @@ class ConflictUrbanArtEnv(gym.Env):
         intrusion = np.any(own_dist2others < self.rpz*2)
         self.intrusion_time_steps += 1 if intrusion else 0
         # We terminate the episode if the ownship is successful or too many time steps have passed
-        terminated = success or self.step_no > self.max_steps
+        terminated = success or self.step_no > self.max_steps or intrusion
         
         # We reward success and penalise intrusions
         finish_reward = 1 if success else 0 # reward for finishing
-        intrusion_reward = -0.1 # Penalise intrusions
-        time_reward = -0.0001 # Penalise going very slow or standing still
-        reward = (finish_reward if not intrusion else finish_reward + intrusion_reward) + time_reward
+        intrusion_reward = -0.2 # Penalise intrusions
+        #time_reward = -0.0001 # Penalise going very slow or standing still
+        speed_reward = abs(self.ac_speeds[0]-self.default_speed) * -0.001
+        reward = (finish_reward if not intrusion else 
+                            finish_reward + intrusion_reward) + speed_reward
         
         # Get needed info
         observation = self._get_obs()

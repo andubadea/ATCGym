@@ -23,13 +23,22 @@ SEED = 42
 NUM_CPU = 16
 TRAIN_EPISODES = int(3e7)
 EVAL_EPISODES = 10
-RENDER_MODE = 'images' # None means no images, images means images
-TRAIN = False
+RENDER_MODE = None # None means no images, images means images
+TRAIN = True
 
 class RLTrainer:
-    def __init__(self, env:str, model:str = 'DQN', buffer_size:int = 500_000, image_mode:str = 'rgb', 
-                 n_intruders:int = 4, image_size:int = 128, seed:int = 42, num_cpu:int = 4, 
-                 train_episodes:int = 1000, eval_episodes:int = 10, train:bool = True,
+    def __init__(self, 
+                 env:str, 
+                 model:str = 'DQN', 
+                 buffer_size:int = 500_000, 
+                 image_mode:str = 'rgb', 
+                 n_intruders:int = 4, 
+                 image_size:int = 128, 
+                 seed:int = 42, 
+                 num_cpu:int = 4, 
+                 train_episodes:int = 1000, 
+                 eval_episodes:int = 10, 
+                 train:bool = True,
                  render_mode:str = None) -> None:
         self.env = env
         self.model = model
@@ -93,9 +102,9 @@ class RLTrainer:
                                 n_envs = self.num_cpu,
                                 vec_env_cls=SubprocVecEnv)
                 model = DQN("CnnPolicy", env, verbose = 1, 
-                            buffer_size=self.buffer_size,
-                            optimize_memory_usage=True,
-                            replay_buffer_kwargs={"handle_timeout_termination":False})
+                    buffer_size=self.buffer_size,
+                    optimize_memory_usage=True,
+                    replay_buffer_kwargs={"handle_timeout_termination":False})
                 return model, env
             else:
                 # Make a test environment
@@ -167,7 +176,8 @@ class RLTrainer:
     def make_gif(self, num) -> None:
         # Get a list of all the images in the debug folder
         png_folder = 'atc_gym/envs/data/images/'
-        png_list = self.natural_sort([img for img in os.listdir(png_folder) if '.png' in img])
+        png_list = self.natural_sort([img for img in os.listdir(png_folder) 
+                                            if '.png' in img])
         # Create a gif
         images = []
         for img in png_list:
@@ -181,7 +191,8 @@ class RLTrainer:
     @staticmethod
     def natural_sort(l): 
         convert = lambda text: int(text) if text.isdigit() else text.lower()
-        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+        alphanum_key = lambda key: [convert(c) for c in 
+                                                re.split('([0-9]+)', key)]
         return sorted(l, key=alphanum_key)
     
 if __name__ == "__main__":
