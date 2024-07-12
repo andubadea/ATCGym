@@ -19,7 +19,7 @@ DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
 N_INTRUDERS = 4 # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
-NUM_CPU = 8
+NUM_CPU = 16
 TRAIN_EPISODES = int(5e7)
 EVAL_EPISODES = 10
 RENDER_MODE = None # None means no images, images means images
@@ -157,7 +157,9 @@ class RLTrainer:
                 env = make_vec_env(self.make_env, 
                                 n_envs = self.num_cpu,
                                 vec_env_cls=SubprocVecEnv)
-                model = SAC("CnnPolicy", env, verbose = 1)
+                model = SAC("CnnPolicy", env, verbose = 1,
+                    optimize_memory_usage=True,
+                    replay_buffer_kwargs={"handle_timeout_termination":False})
                 return model, env
             else:
                 # Make a test environment
