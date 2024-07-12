@@ -1,9 +1,8 @@
 import gymnasium as gym
-from stable_baselines3 import PPO, DQN, A2C
+from stable_baselines3 import PPO, DQN, A2C, SAC
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common.callbacks import EvalCallback
 import os
 import re
 import atc_gym
@@ -11,17 +10,17 @@ import imageio.v2 as imageio
 from typing import Any
 
 atc_gym.register_envs()
-#check_env(gym.make('ConflictUrbanArt-v0', render_mode=None))
+#check_env(gym.make('ConflictSACArt-v0', render_mode=None))
 
-ENV = 'ConflictUrbanArt-v0'
-RL_MODEL = 'PPO'
+ENV = 'ConflictSACArt-v0'
+RL_MODEL = 'SAC'
 IMAGE_MODE = 'rel_rgb'
 DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
-N_INTRUDERS = None # If none, then number of intruders is random every time
+N_INTRUDERS = 4 # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
-NUM_CPU = 16
-TRAIN_EPISODES = int(3e7)
+NUM_CPU = 8
+TRAIN_EPISODES = int(5e7)
 EVAL_EPISODES = 10
 RENDER_MODE = None # None means no images, images means images
 TRAIN = True
@@ -150,6 +149,24 @@ class RLTrainer:
                             image_mode = self.image_mode,
                             image_pixel_size = self.image_size)
                 return A2C.load(self.model_path + "model", env=env), env
+        
+        ############ SAC models ############
+        elif self.model in ['SAC', 'sac']:
+            if self.train:
+                # We train, make a vectorised environment
+                env = make_vec_env(self.make_env, 
+                                n_envs = self.num_cpu,
+                                vec_env_cls=SubprocVecEnv)
+                model = SAC("CnnPolicy", env, verbose = 1)
+                return model, env
+            else:
+                # Make a test environment
+                env = gym.make(self.env, 
+                            render_mode=self.render_mode, 
+                            n_intruders = self.n_intruders,
+                            image_mode = self.image_mode,
+                            image_pixel_size = self.image_size)
+                return SAC.load(self.model_path + "model", env=env), env
             
         else:
             print(f'Model {self.model} not implemented.')
@@ -173,7 +190,7 @@ class RLTrainer:
         self.env_no +=1 
         return env
     
-    def make_gif(self, num) -> None:
+    def make_gif(self) -> None:
         # Get a list of all the images in the debug folder
         png_folder = 'atc_gym/envs/data/images/'
         png_list = self.natural_sort([img for img in os.listdir(png_folder) 
@@ -182,18 +199,23 @@ class RLTrainer:
         images = []
         for img in png_list:
             images.append(imageio.imread(png_folder + img))
-        imageio.mimsave(f'output/Eval_{num+1}.gif', images)
+        imageio.mimsave(f'output/Eval_{self.eval_no+1}.gif', 
+                        images)
         
         # Clean up
         for filename in os.listdir(png_folder):
             os.remove(png_folder + filename)
+        
+        # Increment eval counter
+        self.eval_no += 1
                 
     @staticmethod
     def natural_sort(l): 
         convert = lambda text: int(text) if text.isdigit() else text.lower()
         alphanum_key = lambda key: [convert(c) for c in 
                                                 re.split('([0-9]+)', key)]
-        return sorted(l, key=alphanum_key)
+        return sorted(l, key=alphanum_key)     
+        
     
 if __name__ == "__main__":
     trainer = RLTrainer(env = ENV,

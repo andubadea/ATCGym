@@ -33,7 +33,7 @@ if __name__ == "__main__":
     image_pixel_size = 128
     
     # Make environment
-    env = ConflictUrbanArtEnv("images", n_intruders, image_mode, image_pixel_size)
+    env = ConflictUrbanArtEnv(None, n_intruders, image_mode, image_pixel_size)
     env.reset()
     
     #Test images
@@ -62,14 +62,14 @@ if __name__ == "__main__":
         for a in range(tests_num):
             env.reset()
             rew_sum = 0
+            steps = 0
             done = truncated = False
             while not (done or truncated):
                 obs, reward, done, truncated, info = env.step(0)
                 rew_sum += reward
+                steps += 1
                 
             rew_list.append(rew_sum)
             rolling_avg.append(np.average(rew_list))
-            while len(rolling_avg) > 100:
-                rolling_avg.pop(0)
                 
-            print(f'Episode: {a+1}/{tests_num} | avg: {rew_sum} | rolling avg: {np.average(rolling_avg)}')
+            print(f'Episode: {a+1}/{tests_num} | avg: {rew_sum} | rolling avg: {np.average(rolling_avg)} | steps: {steps}')

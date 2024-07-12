@@ -20,3 +20,9 @@ def register_envs():
         entry_point="atc_gym.envs.conflict_urban_art:ConflictUrbanArtEnv",
         max_episode_steps=1000,
     )
+    
+    register(
+        id="ConflictSACArt-v0",
+        entry_point="atc_gym.envs.conflict_SAC_art:ConflictSACArtEnv",
+        max_episode_steps=1000,
+    )
