@@ -36,7 +36,7 @@ class ConflictSACArtEnv(gym.Env):
         self.rpz = 16 #metres, protection zone radius (minimum distance between two agents)
         self.mag_accel = 3.5 # m/s, constant acceleration magnitude
         self.max_speed = 18 #m/s, maximum speed
-        self.default_speed = 8 #m/s, starting speed for ownship
+        self.default_speed = 9 #m/s, starting speed for ownship
         self.max_speed_diff = self.max_speed - self.default_speed
         
         # Load the city graph
@@ -345,7 +345,7 @@ class ConflictSACArtEnv(gym.Env):
         # Plot ownship info in green
         own_color = (0,1,0)
         # Encode its speed in the blue channel
-        own_spd_color = (0,1, self.ac_speeds[0]/self.max_speed) 
+        own_spd_color = (0,1, abs(self.ac_speeds[0]/self.max_speed))
         # Get route
         route = self.ac_routes[0][self.ac_wpidx[0]:]
         # Insert current location
