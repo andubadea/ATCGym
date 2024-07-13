@@ -2,7 +2,7 @@ import gymnasium as gym
 from stable_baselines3 import PPO, DQN, A2C, SAC
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 import os
 import re
 import atc_gym
@@ -156,7 +156,7 @@ class RLTrainer:
                 # We train, make a vectorised environment
                 env = make_vec_env(self.make_env, 
                                 n_envs = self.num_cpu,
-                                vec_env_cls=SubprocVecEnv)
+                                vec_env_cls=DummyVecEnv)
                 model = SAC("CnnPolicy", env, verbose = 1,
                     optimize_memory_usage=True,
                     replay_buffer_kwargs={"handle_timeout_termination":False})
