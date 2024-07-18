@@ -331,7 +331,7 @@ class ConflictSACArtEnv(gym.Env):
                         self.ac_locations[acidx][1], 
                         marker='o', 
                         color = int_spd_color[i],
-                        s = 600) # Location
+                        s = self.rpz**2*150) # Location
             # Get route
             route = self.ac_routes[acidx][self.ac_wpidx[acidx]:]
             # Insert current location

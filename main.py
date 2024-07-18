@@ -3,6 +3,7 @@ from stable_baselines3 import PPO, DQN, A2C, SAC
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
+from stable_baselines3.common.callbacks import BaseCallback
 import os
 import re
 import atc_gym
@@ -20,10 +21,12 @@ N_INTRUDERS = 4 # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
 NUM_CPU = 16
-TRAIN_EPISODES = int(5e7)
+TRAIN_EPISODES = int(5e6)
 EVAL_EPISODES = 10
-RENDER_MODE = None # None means no images, images means images
-TRAIN = True
+RENDER_MODE = "images" # None means no images, images means images
+TRAIN = False
+
+
 
 class RLTrainer:
     def __init__(self, 
@@ -74,7 +77,7 @@ class RLTrainer:
             # Do the eval
             for i in range(self.eval_episodes):
                 done = truncated = False
-                obs, info = env.reset()
+                obs, info = env.reset(seed=self.seed+i)
                 rew_sum = 0
                 while not (done or truncated):
                     # Predict
@@ -159,7 +162,10 @@ class RLTrainer:
                                 vec_env_cls=SubprocVecEnv)
                 model = SAC("CnnPolicy", env, verbose = 1,
                     optimize_memory_usage=True,
-                    replay_buffer_kwargs={"handle_timeout_termination":False})
+                    replay_buffer_kwargs={"handle_timeout_termination":False},
+                    batch_size = 1024,
+                    gamma = 0.99,
+                    gradient_steps=-1)
                 return model, env
             else:
                 # Make a test environment
@@ -192,7 +198,7 @@ class RLTrainer:
         self.env_no +=1 
         return env
     
-    def make_gif(self) -> None:
+    def make_gif(self, i) -> None:
         # Get a list of all the images in the debug folder
         png_folder = 'atc_gym/envs/data/images/'
         png_list = self.natural_sort([img for img in os.listdir(png_folder) 
@@ -201,15 +207,12 @@ class RLTrainer:
         images = []
         for img in png_list:
             images.append(imageio.imread(png_folder + img))
-        imageio.mimsave(f'output/Eval_{self.eval_no+1}.gif', 
+        imageio.mimsave(f'output/Eval_{i+1}.gif', 
                         images)
         
         # Clean up
         for filename in os.listdir(png_folder):
             os.remove(png_folder + filename)
-        
-        # Increment eval counter
-        self.eval_no += 1
                 
     @staticmethod
     def natural_sort(l): 
