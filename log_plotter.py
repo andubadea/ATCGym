@@ -2,7 +2,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-moving_average_window = 20
+moving_average_window = 1000
 
 def plot_out_log(filename):
     with open(filename, 'r') as f:
@@ -23,7 +23,6 @@ def plot_out_log(filename):
     
     # Moving average
     mv_avg = []
-    print(len(rew_mean))
     for i in range(moving_average_window, len(rew_mean)):
         mv_avg.append(np.average(rew_mean[i-moving_average_window:i]))
             
@@ -46,7 +45,7 @@ def plot_out_log(filename):
 logfiles = os.listdir('output')
 
 for filename in logfiles:
-    if 'out.log' in filename:
+    if 'out4.log' in filename:
         plot_out_log(f'output/{filename}')
 
 #scp sim6:~/Desktop/Andrei/BlueskyGym/\*.log  ./output/

@@ -17,16 +17,14 @@ ENV = 'ConflictSACArt-v0'
 RL_MODEL = 'SAC'
 IMAGE_MODE = 'rel_rgb'
 DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
-N_INTRUDERS = 4 # If none, then number of intruders is random every time
+N_INTRUDERS = None # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
 NUM_CPU = 16
 TRAIN_EPISODES = int(5e6)
 EVAL_EPISODES = 10
-RENDER_MODE = "images" # None means no images, images means images
-TRAIN = False
-
-
+RENDER_MODE = None # None means no images, images means images
+TRAIN = True
 
 class RLTrainer:
     def __init__(self, 
