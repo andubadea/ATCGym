@@ -3,7 +3,7 @@ from stable_baselines3 import PPO, DQN, A2C, SAC
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import EvalCallback
 import os
 import re
 import atc_gym
@@ -11,19 +11,20 @@ import imageio.v2 as imageio
 from typing import Any
 
 atc_gym.register_envs()
-#check_env(gym.make('ConflictSACArt-v0', render_mode=None))
+#check_env(gym.make('ConflictMultiArt-v0', render_mode=None))
 
-ENV = 'ConflictSACArt-v0'
+ENV = 'ConflictMultiArt-v0'
 RL_MODEL = 'SAC'
-IMAGE_MODE = 'rel_rgb'
+IMAGE_MODE = 'rgb'
 DQN_BUFFER_SIZE = 500_000 # elements, needs tweaking if image is also tweaked
-N_INTRUDERS = None # If none, then number of intruders is random every time
+N_INTRUDERS = 3 # If none, then number of intruders is random every time
 IMAGE_SIZE = 128
 SEED = 42
-NUM_CPU = 16
-TRAIN_EPISODES = int(5e6)
+NUM_CPU = 1
+TRAIN_EPISODES = 5000000
 EVAL_EPISODES = 10
-RENDER_MODE = None # None means no images, images means images
+EVAL_INTERVAL = 10000
+RENDER_MODE = None #'images' # None means no images, images means images
 TRAIN = True
 
 class RLTrainer:
@@ -38,6 +39,7 @@ class RLTrainer:
                  num_cpu:int = 4, 
                  train_episodes:int = 1000, 
                  eval_episodes:int = 10, 
+                 eval_interval:int = 100,
                  train:bool = True,
                  render_mode:str = None) -> None:
         self.env = env
@@ -50,6 +52,7 @@ class RLTrainer:
         self.num_cpu = num_cpu
         self.train_episodes = train_episodes
         self.eval_episodes = eval_episodes
+        self.eval_interval = eval_interval
         self.train = train 
         self.render_mode = render_mode
         
@@ -61,12 +64,21 @@ class RLTrainer:
 
     def run(self) -> None:
         # Get the model and the env
-        model, env = self.get_model()
+        model, env, eval_env = self.get_model()
         if self.train:
+            eval_callback = EvalCallback(eval_env, 
+                        best_model_save_path=self.model_path,
+                        log_path=self.model_path, 
+                        eval_freq=self.eval_interval,
+                        n_eval_episodes = self.eval_episodes,
+                        deterministic=True, 
+                        render=False)
             # Train then
-            model.learn(total_timesteps=int(self.train_episodes))
+            model.learn(total_timesteps=int(self.train_episodes),
+                        callback = eval_callback,
+                        log_interval = self.num_cpu)
             # Save final model
-            model.save(self.model_path + "model")
+            model.save(self.model_path + "final_model")
             
         else:
             # Delete old gif files
@@ -97,15 +109,21 @@ class RLTrainer:
     def get_model(self) -> Any:
         if self.model in ['DQN','dqn']:
             if self.train:
-                # We train, make a vectorised environment
-                env = make_vec_env(self.make_env, 
-                                n_envs = self.num_cpu,
-                                vec_env_cls=SubprocVecEnv)
+                if self.num_cpu == 1:
+                    # We train, make a simple environment.
+                    env = self.make_env()
+                else:   
+                    # We train, make a vectorised environment
+                    env = make_vec_env(self.make_env, 
+                                    n_envs = self.num_cpu,
+                                    vec_env_cls=SubprocVecEnv)
+                
+                eval_env = self.make_eval_env()
                 model = DQN("CnnPolicy", env, verbose = 1, 
                     buffer_size=self.buffer_size,
                     optimize_memory_usage=True,
                     replay_buffer_kwargs={"handle_timeout_termination":False})
-                return model, env
+                return model, env, eval_env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -113,17 +131,24 @@ class RLTrainer:
                             n_intruders = self.n_intruders,
                             image_mode = self.image_mode,
                             image_pixel_size = self.image_size)
-                return DQN.load(self.model_path + "model", env=env), env
+                return DQN.load(self.model_path + "model", env=env), env, env
         
         ############ PPO models ############
         elif self.model in ['PPO','ppo']:
             if self.train:
-                # We train, make a vectorised environment
-                env = make_vec_env(self.make_env, 
-                                n_envs = self.num_cpu,
-                                vec_env_cls=SubprocVecEnv)
+                if self.num_cpu == 1:
+                    # We train, make a simple environment.
+                    env = self.make_env()
+                else:   
+                    # We train, make a vectorised environment
+                    env = make_vec_env(self.make_env, 
+                                    n_envs = self.num_cpu,
+                                    vec_env_cls=SubprocVecEnv)
+                
+                eval_env = self.make_eval_env()
+                
                 model = PPO("CnnPolicy", env, verbose = 1)
-                return model, env
+                return model, env, eval_env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -131,17 +156,24 @@ class RLTrainer:
                             n_intruders = self.n_intruders,
                             image_mode = self.image_mode,
                             image_pixel_size = self.image_size)
-                return PPO.load(self.model_path + "model", env=env), env
+                return PPO.load(self.model_path + "model", env=env), env, env
         
         ############ A2C models ############
         elif self.model in ['A2C', 'a2c']:
             if self.train:
-                # We train, make a vectorised environment
-                env = make_vec_env(self.make_env, 
-                                n_envs = self.num_cpu,
-                                vec_env_cls=SubprocVecEnv)
+                if self.num_cpu == 1:
+                    # We train, make a simple environment.
+                    env = self.make_env()
+                else:   
+                    # We train, make a vectorised environment
+                    env = make_vec_env(self.make_env, 
+                                    n_envs = self.num_cpu,
+                                    vec_env_cls=SubprocVecEnv)
+                
+                eval_env = self.make_eval_env()
+                
                 model = A2C("CnnPolicy", env, verbose = 1)
-                return model, env
+                return model, env, eval_env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -149,22 +181,27 @@ class RLTrainer:
                             n_intruders = self.n_intruders,
                             image_mode = self.image_mode,
                             image_pixel_size = self.image_size)
-                return A2C.load(self.model_path + "model", env=env), env
+                return A2C.load(self.model_path + "model", env=env), env, env
         
         ############ SAC models ############
         elif self.model in ['SAC', 'sac']:
             if self.train:
-                # We train, make a vectorised environment
-                env = make_vec_env(self.make_env, 
-                                n_envs = self.num_cpu,
-                                vec_env_cls=SubprocVecEnv)
+                if self.num_cpu == 1:
+                    # We train, make a simple environment.
+                    env = self.make_env()
+                else:   
+                    # We train, make a vectorised environment
+                    env = make_vec_env(self.make_env, 
+                                    n_envs = self.num_cpu,
+                                    vec_env_cls=SubprocVecEnv)
+                
+                eval_env = self.make_eval_env()
+                
                 model = SAC("CnnPolicy", env, verbose = 1,
                     optimize_memory_usage=True,
-                    replay_buffer_kwargs={"handle_timeout_termination":False},
-                    batch_size = 1024,
-                    gamma = 0.99,
-                    gradient_steps=-1)
-                return model, env
+                    replay_buffer_kwargs={"handle_timeout_termination":False})
+
+                return model, env, eval_env
             else:
                 # Make a test environment
                 env = gym.make(self.env, 
@@ -172,7 +209,7 @@ class RLTrainer:
                             n_intruders = self.n_intruders,
                             image_mode = self.image_mode,
                             image_pixel_size = self.image_size)
-                return SAC.load(self.model_path + "model", env=env), env
+                return SAC.load(self.model_path + "model", env=env), env, env
             
         else:
             print(f'Model {self.model} not implemented.')
@@ -188,6 +225,24 @@ class RLTrainer:
         """
         env = gym.make(self.env, 
                 render_mode=self.render_mode, 
+                n_intruders = self.n_intruders,
+                image_mode = self.image_mode,
+                image_pixel_size = self.image_size)
+
+        env.reset(seed=self.seed + self.env_no)
+        self.env_no +=1 
+        return env
+    
+    def make_eval_env(self):
+        """
+        Utility function for multiprocessed env.
+        :param env_id: the environment ID
+        :param num_env: the number of environments you wish to have in subprocesses
+        :param seed: the inital seed for RNG
+        :param rank: index of the subprocess
+        """
+        env = gym.make(self.env, 
+                render_mode='images', 
                 n_intruders = self.n_intruders,
                 image_mode = self.image_mode,
                 image_pixel_size = self.image_size)
@@ -231,6 +286,7 @@ if __name__ == "__main__":
                         num_cpu = NUM_CPU, 
                         train_episodes = TRAIN_EPISODES,
                         eval_episodes = EVAL_EPISODES, 
+                        eval_interval = EVAL_INTERVAL,
                         train = TRAIN, 
                         render_mode = RENDER_MODE)
     

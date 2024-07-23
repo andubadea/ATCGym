@@ -5,6 +5,7 @@ import os
 from atc_gym.envs.conflict_art import ConflictArtEnv
 from atc_gym.envs.conflict_gen_art import ConflictGenArtEnv
 from atc_gym.envs.conflict_urban_art import ConflictUrbanArtEnv
+from atc_gym.envs.conflict_multi_art import ConflictMultiArtEnv
 
 def natural_sort(l): 
         convert = lambda text: int(text) if text.isdigit() else text.lower()
@@ -28,12 +29,12 @@ def make_gif() -> None:
 # Testing
 if __name__ == "__main__":
     # Variables
-    n_intruders = None
-    image_mode = 'rel_rgb'
+    n_intruders = 3
+    image_mode = 'rgb'
     image_pixel_size = 128
     
     # Make environment
-    env = ConflictUrbanArtEnv(None, n_intruders, image_mode, image_pixel_size)
+    env = ConflictMultiArtEnv('images', n_intruders, image_mode, image_pixel_size)
     env.reset()
     
     #Test images
@@ -49,23 +50,19 @@ if __name__ == "__main__":
             env.reset()
             env.step(0)
     
-    # Test step time
-    if False:
-        import timeit
-        print(timeit.timeit('env.reset()', number = 500, globals = globals())/500)
-    
     #Test average dumb reward
     if True:
         rolling_avg = []
         rew_list = []
-        tests_num = 100
+        tests_num = 200
         for a in range(tests_num):
             env.reset()
             rew_sum = 0
             steps = 0
             done = truncated = False
             while not (done or truncated):
-                obs, reward, done, truncated, info = env.step(0)
+                spd = np.array([[0],[0],[0]])
+                obs, reward, done, truncated, info = env.step(spd)
                 rew_sum += reward
                 steps += 1
                 
